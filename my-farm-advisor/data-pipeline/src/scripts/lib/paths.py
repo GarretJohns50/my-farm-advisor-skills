@@ -33,6 +33,14 @@ def grower_logs_dir(grower_slug: str) -> Path:
     return grower_dir(grower_slug) / "logs"
 
 
+def grower_maps_dir(grower_slug: str) -> Path:
+    return grower_dir(grower_slug) / "maps"
+
+
+def grower_map_path(grower_slug: str, filename: str = "grower_web_map.html") -> Path:
+    return grower_maps_dir(grower_slug) / filename
+
+
 def farm_dir(grower_slug: str, farm_slug: str) -> Path:
     return grower_dir(grower_slug) / "farms" / farm_slug
 
