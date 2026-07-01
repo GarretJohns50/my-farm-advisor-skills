@@ -170,19 +170,31 @@ def analyze_weather(data_list: list[dict], out_dir: Path) -> None:
         w["month"] = w["date"].dt.month
         w["GDD"] = w["T2M"].apply(lambda t: max(0, t - 10))
 
-        # Annual stats
-        annual = w.groupby("year").agg({
+        # Step 1: per-field annual stats (weather CSV has one row per field per day)
+        per_field_annual = w.groupby(["year", "field_id"]).agg({
             "T2M": "mean",
             "PRECTOTCORR": "sum",
             "ALLSKY_SFC_SW_DWN": "mean",
             "GDD": "sum",
         }).reset_index()
 
-        # Growing season (Apr-Sep) precip and GDD
+        # Step 2: average across fields for the grower
+        annual = per_field_annual.groupby("year").agg({
+            "T2M": "mean",
+            "PRECTOTCORR": "mean",
+            "ALLSKY_SFC_SW_DWN": "mean",
+            "GDD": "mean",
+        }).reset_index()
+
+        # Growing season (Apr-Sep) — same two-step fix
         gs = w[(w["month"] >= 4) & (w["month"] <= 9)]
-        gs_annual = gs.groupby("year").agg({
+        gs_per_field = gs.groupby(["year", "field_id"]).agg({
             "PRECTOTCORR": "sum",
             "GDD": "sum",
+        }).reset_index()
+        gs_annual = gs_per_field.groupby("year").agg({
+            "PRECTOTCORR": "mean",
+            "GDD": "mean",
         }).reset_index()
 
         for _, row in annual.iterrows():
