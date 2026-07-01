@@ -28,6 +28,7 @@ sys.path.insert(0, str(_SCRIPTS_DIR / "lib"))
 
 from paths import (  # noqa: E402
     DATA_ROOT,
+    cross_grower_eda_dir,
     farm_boundary_path,
     farm_cdl_full_composition_path,
     farm_weather_path,
@@ -357,15 +358,17 @@ def analyze_weather(data: dict, out: Path) -> None:
 # ---------------------------------------------------------------------------
 # Cross-Grower (X)
 # ---------------------------------------------------------------------------
-def analyze_cross_grower(primary_data: dict, out: Path) -> None:
+def analyze_cross_grower(primary_data: dict) -> None:
     print("\n--- Cross-Grower Analysis ---")
+    cross_out = cross_grower_eda_dir()
+    cross_out.mkdir(parents=True, exist_ok=True)
     all_data = []
     for g, f, label in _GROWERS:
         d = load_data(g, f)
         d["label"] = label
         all_data.append(d)
 
-    # X1: Boundary sizes across growers
+    # Field-level boundary sizes across growers
     fig, ax = plt.subplots(figsize=(10, 6))
     sizes = []
     labels = []
@@ -381,14 +384,14 @@ def analyze_cross_grower(primary_data: dict, out: Path) -> None:
             patch.set_facecolor(color)
             patch.set_alpha(0.6)
         ax.set_ylabel("Field Area (acres)")
-        ax.set_title("X1: Field Size Distribution Across Growers", fontweight="bold")
+        ax.set_title("Field-Level Boundary Sizes Across Growers", fontweight="bold")
         ax.grid(True, alpha=0.3, axis="y")
         plt.tight_layout()
-        plt.savefig(out / "X1_cross_boundary_sizes.png", dpi=150, bbox_inches="tight")
+        plt.savefig(cross_out / "field_level_boundary_sizes.png", dpi=150, bbox_inches="tight")
         plt.close()
-        print(f"  ✓ {out / 'X1_cross_boundary_sizes.png'}")
+        print(f"  ✓ {cross_out / 'field_level_boundary_sizes.png'}")
 
-    # X2: CDL mix across growers
+    # Field-level CDL mix across growers
     fig, ax = plt.subplots(figsize=(10, 6))
     mix_rows = []
     for d in all_data:
@@ -409,15 +412,15 @@ def analyze_cross_grower(primary_data: dict, out: Path) -> None:
         pivot2 = mdf.pivot(index="crop", columns="grower", values="pct").fillna(0)
         pivot2.plot(kind="bar", ax=ax, color=["#2E7D32", "#1565C0", "#E65100"], alpha=0.8)
         ax.set_ylabel("% of Field-Years")
-        ax.set_title("X2: Crop Mix Across Growers", fontweight="bold")
+        ax.set_title("Field-Level Crop Mix Across Growers", fontweight="bold")
         ax.legend(title="Grower", loc="upper right")
         ax.grid(True, alpha=0.3, axis="y")
         plt.tight_layout()
-        plt.savefig(out / "X2_cross_cdl_mix.png", dpi=150, bbox_inches="tight")
+        plt.savefig(cross_out / "field_level_cdl_mix.png", dpi=150, bbox_inches="tight")
         plt.close()
-        print(f"  ✓ {out / 'X2_cross_cdl_mix.png'}")
+        print(f"  ✓ {cross_out / 'field_level_cdl_mix.png'}")
 
-    # X3: Weather CV across growers
+    # Field-level weather CV across growers
     cv_rows = []
     for d in all_data:
         w = d["weather"]
@@ -442,16 +445,16 @@ def analyze_cross_grower(primary_data: dict, out: Path) -> None:
         colors = ["#2E7D32", "#1565C0", "#E65100"]
         bars = ax.bar(mean_cv["grower"], mean_cv["cv_gdd"], color=colors, alpha=0.8)
         ax.set_ylabel("Mean Inter-Field CV of GDD")
-        ax.set_title("X3: Weather Uniformity Across Growers\n(Lower = More Uniform)", fontweight="bold")
+        ax.set_title("Field-Level Weather Uniformity Across Growers\n(Lower = More Uniform)", fontweight="bold")
         ax.grid(True, alpha=0.3, axis="y")
         for bar in bars:
             height = bar.get_height()
             ax.text(bar.get_x() + bar.get_width() / 2, height + 0.005,
                     f"{height:.3f}", ha="center", va="bottom", fontsize=10)
         plt.tight_layout()
-        plt.savefig(out / "X3_cross_weather_cv.png", dpi=150, bbox_inches="tight")
+        plt.savefig(cross_out / "field_level_weather_cv.png", dpi=150, bbox_inches="tight")
         plt.close()
-        print(f"  ✓ {out / 'X3_cross_weather_cv.png'}")
+        print(f"  ✓ {cross_out / 'field_level_weather_cv.png'}")
 
 
 # ---------------------------------------------------------------------------
@@ -482,7 +485,7 @@ def main() -> None:
     analyze_weather(data, out)
 
     if args.cross_grower:
-        analyze_cross_grower(data, out)
+        analyze_cross_grower(data)
 
     print("\n" + "=" * 60)
     print("Field-level EDA complete")

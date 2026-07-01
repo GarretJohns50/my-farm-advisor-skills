@@ -17,6 +17,11 @@ GROWERS_ROOT = DATA_ROOT / "growers"
 SHARED_ROOT = DATA_ROOT / "shared"
 
 
+def cross_grower_eda_dir() -> Path:
+    """Shared directory for cross-grower EDA artifacts."""
+    return DATA_ROOT / "eda" / "cross_grower"
+
+
 def grower_dir(grower_slug: str) -> Path:
     return GROWERS_ROOT / grower_slug
 

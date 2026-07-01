@@ -62,11 +62,12 @@ Per farm:
 ```
 
 Cross-grower (when `--cross-grower`):
+Written once to the shared directory regardless of which grower runs the script:
 ```
-growers/<grower>/farms/<farm>/derived/eda_field_level/
-├── X1_cross_boundary_sizes.png
-├── X2_cross_cdl_mix.png
-└── X3_cross_weather_cv.png
+${DATA_PIPELINE_DATA_ROOT}/data-pipeline/eda/cross_grower/
+├── field_level_boundary_sizes.png
+├── field_level_cdl_mix.png
+└── field_level_weather_cv.png
 ```
 
 ## Storytelling Guide
@@ -107,15 +108,17 @@ Story: "How patchy is our farm's weather?" A wide box/violin spread means manage
 **C3 — CV Analysis**
 Story: "Is our farm's climate getting more or less uniform?" Rising CV across years = increasing microclimate fragmentation. Falling CV = convergence.
 
-### Cross-Grower (X)
+### Cross-Grower (Shared)
 
-**X1 — Boundary Sizes**
+These files live in `${DATA_PIPELINE_DATA_ROOT}/data-pipeline/eda/cross_grower/` and are written once regardless of which grower runs the script.
+
+**field_level_boundary_sizes.png**
 Story: "How does our field-size profile compare to peers?" Different medians = different equipment scales or land-tenure histories.
 
-**X2 — CDL Mix**
+**field_level_cdl_mix.png**
 Story: "Do regions differ in crop preference?" A grower with 90% corn may be continuous-corn dominant; one with 50/50 may rotate strictly.
 
-**X3 — Weather CV**
+**field_level_weather_cv.png**
 Story: "Which region has the most uniform field-level weather?" Low CV = flat, uniform terrain. High CV = variable topography or mixed irrigation.
 
 ## Resources
