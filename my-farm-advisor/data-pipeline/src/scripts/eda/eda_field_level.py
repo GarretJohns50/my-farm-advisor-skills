@@ -166,6 +166,42 @@ def analyze_boundaries(data: dict, out: Path) -> None:
     corr.to_csv(out / "A3_boundary_correlation.csv", index=False)
     print(f"  ✓ {out / 'A3_boundary_correlation.csv'} (r={r:.3f}, p={p:.4f})")
 
+    # M1: Geospatial boundary map — choropleth colored by area with labels
+    fig, ax = plt.subplots(figsize=(12, 10))
+    # Plot boundaries with area-based coloring
+    gdf_plot = gdf.to_crs("EPSG:4326")  # ensure lat/lon for aspect ratio
+    gdf_plot.plot(
+        column="area_acres",
+        cmap="YlGn",
+        legend=True,
+        legend_kwds={"label": "Field Area (acres)", "shrink": 0.5},
+        edgecolor="black",
+        linewidth=0.8,
+        alpha=0.85,
+        ax=ax,
+    )
+    # Add field ID labels at centroids
+    for _, row in gdf_plot.iterrows():
+        centroid = row.geometry.centroid
+        ax.annotate(
+            row["field_id"],
+            xy=(centroid.x, centroid.y),
+            ha="center",
+            va="center",
+            fontsize=7,
+            fontweight="bold",
+            color="darkgreen",
+            bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.7, edgecolor="none"),
+        )
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title("M1: Field Boundary Map (colored by area)", fontweight="bold")
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(out / "M1_field_boundary_map.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  ✓ {out / 'M1_field_boundary_map.png'}")
+
 
 # ---------------------------------------------------------------------------
 # Category B: CDL / Cropland

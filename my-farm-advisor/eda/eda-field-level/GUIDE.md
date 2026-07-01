@@ -48,7 +48,7 @@ python scripts/eda/eda_field_level.py \
 
 Per farm:
 ```
-growers/<grower>/farms/<farm>/derived/eda_field_level/
+ growers/<grower>/farms/<farm>/derived/eda_field_level/
 ├── A1_boundary_size_distribution.png
 ├── A2_boundary_shape_scatter.png
 ├── A3_boundary_correlation.csv
@@ -57,7 +57,8 @@ growers/<grower>/farms/<farm>/derived/eda_field_level/
 ├── B3_cdl_rotation_matrix.csv
 ├── C1_weather_temporal_trends.png
 ├── C2_weather_interfield_spread.png
-└── C3_weather_cv_analysis.csv
+├── C3_weather_cv_analysis.csv
+└── M1_field_boundary_map.png
 ```
 
 Cross-grower (when `--cross-grower`):
@@ -80,6 +81,9 @@ Story: "Do larger fields tend to be center-pivot circles?" A positive correlatio
 
 **A3 — Correlation CSV**
 Story: "How strong is the size-shape link?" Pearson r + p-value quantifies the relationship for reporting.
+
+**M1 — Geospatial Boundary Map**
+Story: "Where are our fields and how large is each one?" A choropleth map with field polygons colored by area and labeled by field ID. Shows spatial clustering (e.g., large fields grouped together) and gaps between parcels. This is the only true geospatial output — everything else is statistical.
 
 ### Category B: CDL / Cropland
 
