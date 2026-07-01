@@ -8,6 +8,8 @@ Input:  canonical farm soil table and shared CDL tables under the runtime root.
 Output: farm soil and CDL distribution plots under the runtime root.
 """
 
+import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -18,29 +20,42 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_SCRIPTS_DIR))
 sys.path.insert(0, str(_SCRIPTS_DIR / "lib"))
 
 from lib.paths import (  # noqa: E402
+    farm_cdl_year_table_path,
     farm_reports_dir,
-    farm_table_path,
-    shared_cdl_year_table_path,
+    farm_soil_sample_path,
 )
 
-_DEFAULT_GROWER = "default-grower"
-_DEFAULT_FARM = "default-farm"
+_DEFAULT_GROWER = os.environ.get("AG_GROWER_SLUG", "default-grower")
+_DEFAULT_FARM = os.environ.get("AG_FARM_SLUG", "default-farm")
 
 
-def main():
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--grower-slug", default=_DEFAULT_GROWER)
+    parser.add_argument("--farm-slug", default=_DEFAULT_FARM)
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace | None = None) -> None:
+    if args is None:
+        args = parse_args()
+
     print("=" * 60)
     print("Step 7: Distribution Analysis")
     print("=" * 60)
+    print(f"Grower: {args.grower_slug} | Farm: {args.farm_slug}")
 
-    reports_dir = farm_reports_dir(_DEFAULT_GROWER, _DEFAULT_FARM)
+    reports_dir = farm_reports_dir(args.grower_slug, args.farm_slug)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    soil = pd.read_csv(farm_table_path(_DEFAULT_GROWER, _DEFAULT_FARM, "iowa_10_fields_soil.csv"))
-    cdl_2023 = pd.read_csv(shared_cdl_year_table_path(2023))
-    cdl_2024 = pd.read_csv(shared_cdl_year_table_path(2024))
+    soil_path = farm_soil_sample_path(args.grower_slug, args.farm_slug)
+    soil = pd.read_csv(soil_path) if soil_path.exists() else pd.DataFrame()
+    cdl_2023 = pd.read_csv(farm_cdl_year_table_path(args.grower_slug, args.farm_slug, 2023))
+    cdl_2024 = pd.read_csv(farm_cdl_year_table_path(args.grower_slug, args.farm_slug, 2024))
 
     # ===============================
     # Plot 1: Soil Property Distributions
@@ -118,7 +133,8 @@ def main():
         "Soil Property Distributions Across All Fields", fontsize=14, fontweight="bold", y=1.02
     )
     plt.tight_layout()
-    soil_distributions_path = reports_dir / "iowa_soil_distributions.png"
+    prefix = args.farm_slug.replace("-", "_")
+    soil_distributions_path = reports_dir / f"{prefix}_soil_distributions.png"
     plt.savefig(soil_distributions_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"✓ Saved: {soil_distributions_path}")
@@ -157,7 +173,7 @@ def main():
     ax.tick_params(axis="x", rotation=45)
 
     plt.tight_layout()
-    cdl_distributions_path = reports_dir / "iowa_cdl_distributions.png"
+    cdl_distributions_path = reports_dir / f"{prefix}_cdl_distributions.png"
     plt.savefig(cdl_distributions_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"✓ Saved: {cdl_distributions_path}")
@@ -166,4 +182,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(parse_args())

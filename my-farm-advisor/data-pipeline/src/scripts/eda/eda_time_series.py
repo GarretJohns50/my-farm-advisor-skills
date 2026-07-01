@@ -9,6 +9,8 @@ Input:  canonical farm weather table under the runtime root.
 Output: farm weather time-series, precipitation, and GDD plots under the runtime root.
 """
 
+import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -21,24 +23,36 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_SCRIPTS_DIR))
 sys.path.insert(0, str(_SCRIPTS_DIR / "lib"))
 
 from lib.paths import farm_reports_dir, farm_weather_path  # noqa: E402
 
-_DEFAULT_GROWER = "default-grower"
-_DEFAULT_FARM = "default-farm"
+_DEFAULT_GROWER = os.environ.get("AG_GROWER_SLUG", "default-grower")
+_DEFAULT_FARM = os.environ.get("AG_FARM_SLUG", "default-farm")
 
 
-def main():
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--grower-slug", default=_DEFAULT_GROWER)
+    parser.add_argument("--farm-slug", default=_DEFAULT_FARM)
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace | None = None) -> pd.DataFrame:
+    if args is None:
+        args = parse_args()
+
     print("=" * 60)
     print("Step 6: Time Series Analysis")
     print("=" * 60)
+    print(f"Grower: {args.grower_slug} | Farm: {args.farm_slug}")
 
-    reports_dir = farm_reports_dir(_DEFAULT_GROWER, _DEFAULT_FARM)
+    reports_dir = farm_reports_dir(args.grower_slug, args.farm_slug)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     weather = pd.read_csv(
-        farm_weather_path(_DEFAULT_GROWER, _DEFAULT_FARM),
+        farm_weather_path(args.grower_slug, args.farm_slug),
         parse_dates=["date"],
     )
     weather = weather.sort_values("date")
@@ -82,7 +96,7 @@ def main():
     ax.axhline(y=10, color="green", linestyle="--", alpha=0.5, label="10°C")
     ax.axhline(y=20, color="darkgreen", linestyle="--", alpha=0.5, label="20°C")
 
-    ax.set_title("Iowa Fields: Daily Temperature (2023-2024)", fontsize=14, fontweight="bold")
+    ax.set_title(f"Daily Temperature (2021-2025)", fontsize=14, fontweight="bold")
     ax.set_xlabel("Date")
     ax.set_ylabel("Temperature (°C)")
     ax.legend(loc="upper right")
@@ -92,7 +106,8 @@ def main():
     plt.xticks(rotation=45)
 
     plt.tight_layout()
-    weather_timeseries_path = reports_dir / "iowa_weather_timeseries.png"
+    prefix = args.farm_slug.replace("-", "_")
+    weather_timeseries_path = reports_dir / f"{prefix}_weather_timeseries.png"
     plt.savefig(weather_timeseries_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"✓ Saved: {weather_timeseries_path}")
@@ -113,7 +128,7 @@ def main():
     bars1 = ax.bar(x - width / 2, monthly[2023], width, label="2023", color="steelblue")
     bars2 = ax.bar(x + width / 2, monthly[2024], width, label="2024", color="darkgreen")
 
-    ax.set_title("Monthly Precipitation Comparison: 2023 vs 2024", fontsize=14, fontweight="bold")
+    ax.set_title("Monthly Precipitation", fontsize=14, fontweight="bold")
     ax.set_xlabel("Month")
     ax.set_ylabel("Precipitation (mm)")
     ax.set_xticks(x)
@@ -136,7 +151,7 @@ def main():
             )
 
     plt.tight_layout()
-    monthly_precip_path = reports_dir / "iowa_monthly_precip.png"
+    monthly_precip_path = reports_dir / f"{prefix}_monthly_precip.png"
     plt.savefig(monthly_precip_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"✓ Saved: {monthly_precip_path}")
@@ -192,17 +207,16 @@ def main():
     ax2.grid(True, alpha=0.3, axis="y")
 
     plt.tight_layout()
-    gdd_analysis_path = reports_dir / "iowa_gdd_analysis.png"
+    gdd_analysis_path = reports_dir / f"{prefix}_gdd_analysis.png"
     plt.savefig(gdd_analysis_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"✓ Saved: {gdd_analysis_path}")
 
     print("\n✓ Time series analysis complete")
-    print(f"  2023 Growing Season GDD: {gdd_2023:.0f}")
-    print(f"  2024 Growing Season GDD: {gdd_2024:.0f}")
+    print(f"  Growing Season GDD calculated")
 
     return daily
 
 
 if __name__ == "__main__":
-    main()
+    main(parse_args())
