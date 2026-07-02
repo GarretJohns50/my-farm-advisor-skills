@@ -9,6 +9,7 @@ ${DATA_PIPELINE_DATA_ROOT}/data-pipeline/reports/field_level_eda_report.html
 from __future__ import annotations
 
 import base64
+import glob
 import sys
 from pathlib import Path
 
@@ -66,25 +67,43 @@ def _a3_table() -> str:
 def _b3_table() -> str:
     rows = []
     for g, f, label in _GROWERS:
-        csv = _load_csv(farm_dir(g, f) / "derived" / "eda_field_level" / "B3_cdl_rotation_matrix.csv")
-        if csv is None:
+        # Load the normalized transition matrix (first column is the index)
+        path = farm_dir(g, f) / "derived" / "eda_field_level" / "B3_cdl_rotation_matrix.csv"
+        if not path.exists():
             continue
-        if "Corn" in csv.index:
-            corn_row = csv.loc["Corn"]
-            cc = corn_row.get("Corn", 0) if isinstance(corn_row, pd.Series) else 0
-            cs = corn_row.get("Soybeans", 0) if isinstance(corn_row, pd.Series) else 0
-        else:
-            cc = cs = 0
-        if "Soybeans" in csv.index:
-            soy_row = csv.loc["Soybeans"]
-            sc = soy_row.get("Corn", 0) if isinstance(soy_row, pd.Series) else 0
-        else:
-            sc = 0
+        csv = pd.read_csv(path, index_col=0)
+
+        # Compute raw counts from CDL full composition
+        cdl_pattern = str(farm_dir(g, f) / "derived" / "tables" / "*full_composition.csv")
+        cdl_paths = glob.glob(cdl_pattern)
+        cdl_csv = _load_csv(Path(cdl_paths[0])) if cdl_paths else None
+        counts: dict[str, int] = {}
+        if cdl_csv is not None:
+            dom = cdl_csv.loc[cdl_csv.groupby(["field_id", "year"])["pct"].idxmax()].reset_index(drop=True)[["field_id", "year", "crop_name"]]
+            for fid in dom["field_id"].unique():
+                sub = dom[dom["field_id"] == fid].sort_values("year")
+                for i in range(len(sub) - 1):
+                    key = f"{sub.iloc[i]['crop_name']}->{sub.iloc[i+1]['crop_name']}"
+                    counts[key] = counts.get(key, 0) + 1
+
+        def _fmt(from_crop: str, to_crop: str) -> str:
+            if from_crop not in csv.index or to_crop not in csv.columns:
+                return "—"
+            pct = float(csv.loc[from_crop, to_crop])
+            key = f"{from_crop}->{to_crop}"
+            n = counts.get(key, 0)
+            # Total transitions starting with from_crop (sum over all possible to_crops)
+            total = sum(counts.get(f"{from_crop}->{t}", 0) for t in csv.columns)
+            if n == 0 and pct == 0:
+                return "—"
+            return f"{pct:.0%} ({n}/{total})"
+
         rows.append({
             "Grower": label,
-            "Corn→Corn": f"{cc:.0%}" if isinstance(cc, (int, float)) else "—",
-            "Corn→Soy": f"{cs:.0%}" if isinstance(cs, (int, float)) else "—",
-            "Soy→Corn": f"{sc:.0%}" if isinstance(sc, (int, float)) else "—",
+            "Corn→Corn": _fmt("Corn", "Corn"),
+            "Corn→Soy": _fmt("Corn", "Soybeans"),
+            "Soy→Corn": _fmt("Soybeans", "Corn"),
+            "Soy→Soy": _fmt("Soybeans", "Soybeans"),
         })
     return _table_html(pd.DataFrame(rows))
 
@@ -115,10 +134,17 @@ def build_report() -> str:
     # Representative images (Illinois)
     a1 = _b64_png(rep_dir / "A1_boundary_size_distribution.png")
     a2 = _b64_png(rep_dir / "A2_boundary_shape_scatter.png")
-    b1 = _b64_png(rep_dir / "B1_cdl_dominant_heatmap.png")
-    b2 = _b64_png(rep_dir / "B2_cdl_diversity_index.png")
     c1 = _b64_png(rep_dir / "C1_weather_temporal_trends.png")
     c2 = _b64_png(rep_dir / "C2_weather_interfield_spread.png")
+
+    # B1/B2 for all 3 growers (side-by-side in report)
+    b1_ia = _b64_png(farm_dir("central-ia-grower", "central-ia-grower-iowa") / "derived" / "eda_field_level" / "B1_cdl_dominant_heatmap.png")
+    b1_il = _b64_png(farm_dir("central-il-grower", "central-il-grower-illinois") / "derived" / "eda_field_level" / "B1_cdl_dominant_heatmap.png")
+    b1_ne = _b64_png(farm_dir("central-ne-grower", "central-ne-grower-nebraska") / "derived" / "eda_field_level" / "B1_cdl_dominant_heatmap.png")
+
+    b2_ia = _b64_png(farm_dir("central-ia-grower", "central-ia-grower-iowa") / "derived" / "eda_field_level" / "B2_cdl_diversity_index.png")
+    b2_il = _b64_png(farm_dir("central-il-grower", "central-il-grower-illinois") / "derived" / "eda_field_level" / "B2_cdl_diversity_index.png")
+    b2_ne = _b64_png(farm_dir("central-ne-grower", "central-ne-grower-nebraska") / "derived" / "eda_field_level" / "B2_cdl_diversity_index.png")
 
     # Geospatial maps (all 3)
     m1_il = _b64_png(farm_dir("central-il-grower", "central-il-grower-illinois") / "derived" / "eda_field_level" / "M1_field_boundary_map.png")
@@ -218,17 +244,36 @@ def build_report() -> str:
 <p class="img-caption">None are significant at α = 0.05 — size and shape are independent in this sample.</p>
 
 <h2>5. CDL / Cropland (Category B)</h2>
-<h3>B1 — Dominant Crop Heatmap</h3>
-<img src="{b1}" alt="CDL dominant crop heatmap">
-<p class="img-caption">Rows = fields, columns = years. Horizontal bands = monoculture; diagonal stripes = strict rotation.</p>
+<h3>B1 — Dominant Crop Heatmap (All Growers)</h3>
+<div class="img-row">
+  <img src="{b1_ia}" alt="Iowa CDL heatmap">
+  <img src="{b1_il}" alt="Illinois CDL heatmap">
+  <img src="{b1_ne}" alt="Nebraska CDL heatmap">
+  <div class="caption">
+    Left: Iowa — mixed corn/soy with some continuous corn blocks and grass/pasture persistence.
+    Center: Illinois — mostly strict corn-soy rotation with occasional grass/pasture strips.
+    Right: Nebraska — near-monoculture corn (horizontal green bands across all years).
+  </div>
+</div>
 
-<h3>B2 — Crop Diversity Index</h3>
-<img src="{b2}" alt="Shannon diversity index">
-<p class="img-caption">Shannon diversity per field (2021–2025). High = mixed use; low = monoculture.</p>
+<h3>B2 — Crop Diversity Index (All Growers)</h3>
+<div class="img-row">
+  <img src="{b2_ia}" alt="Iowa diversity index">
+  <img src="{b2_il}" alt="Illinois diversity index">
+  <img src="{b2_ne}" alt="Nebraska diversity index">
+  <div class="caption">
+    Left: Iowa — moderate diversity (forest/grass strips on some fields). 
+    Center: Illinois — low-to-moderate diversity (mostly corn/soy). 
+    Right: Nebraska — very low diversity (almost pure corn on every field).
+  </div>
+</div>
 
 <h3>B3 — Rotation Transition Matrix (All Growers)</h3>
 {b3_html}
-<p class="img-caption">Nebraska is near-monoculture corn. Illinois has strictest corn-soy rotation. Iowa is intermediate.</p>
+<p class="img-caption">
+  Percentages are <em>row-normalized</em> (e.g., "Corn→Corn: 81%" means 81% of transitions 
+  that started as Corn stayed Corn). Counts shown in parentheses for verification.
+</p>
 
 <h2>6. Weather (Category C)</h2>
 <h3>C1 — Temporal GDD Trends</h3>
