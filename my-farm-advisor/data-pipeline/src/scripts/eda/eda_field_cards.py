@@ -9,6 +9,8 @@ Input:  All downloaded data
 Output: farm report cards under the configured runtime root.
 """
 
+import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -21,37 +23,50 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_SCRIPTS_DIR))
 sys.path.insert(0, str(_SCRIPTS_DIR / "lib"))
 
 from lib.paths import (  # noqa: E402
     farm_boundary_path,
+    farm_cdl_year_table_path,
     farm_reports_dir,
-    farm_table_path,
+    farm_soil_sample_path,
     farm_weather_path,
-    shared_cdl_year_table_path,
 )
 
-_DEFAULT_GROWER = "default-grower"
-_DEFAULT_FARM = "default-farm"
+_DEFAULT_GROWER = os.environ.get("AG_GROWER_SLUG", "default-grower")
+_DEFAULT_FARM = os.environ.get("AG_FARM_SLUG", "default-farm")
 
 
-def main():
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--grower-slug", default=_DEFAULT_GROWER)
+    parser.add_argument("--farm-slug", default=_DEFAULT_FARM)
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace | None = None) -> pd.DataFrame:
+    if args is None:
+        args = parse_args()
+
     print("=" * 60)
     print("Step 9: Per-Field Poster Cards")
     print("=" * 60)
+    print(f"Grower: {args.grower_slug} | Farm: {args.farm_slug}")
 
-    reports_dir = farm_reports_dir(_DEFAULT_GROWER, _DEFAULT_FARM)
+    reports_dir = farm_reports_dir(args.grower_slug, args.farm_slug)
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     # Load all data
-    fields = gpd.read_file(farm_boundary_path(_DEFAULT_GROWER, _DEFAULT_FARM))
-    soil = pd.read_csv(farm_table_path(_DEFAULT_GROWER, _DEFAULT_FARM, "iowa_10_fields_soil.csv"))
+    fields = gpd.read_file(farm_boundary_path(args.grower_slug, args.farm_slug))
+    soil_path = farm_soil_sample_path(args.grower_slug, args.farm_slug)
+    soil = pd.read_csv(soil_path) if soil_path.exists() else pd.DataFrame()
     weather = pd.read_csv(
-        farm_weather_path(_DEFAULT_GROWER, _DEFAULT_FARM),
+        farm_weather_path(args.grower_slug, args.farm_slug),
         parse_dates=["date"],
     )
-    cdl_2023 = pd.read_csv(shared_cdl_year_table_path(2023))
-    cdl_2024 = pd.read_csv(shared_cdl_year_table_path(2024))
+    cdl_2023 = pd.read_csv(farm_cdl_year_table_path(args.grower_slug, args.farm_slug, 2023))
+    cdl_2024 = pd.read_csv(farm_cdl_year_table_path(args.grower_slug, args.farm_slug, 2024))
 
     # Get dominant soil per field
     dominant_soil = (
@@ -295,10 +310,10 @@ def main():
 
         print(f"✓ Card {card_num}/10: {field['field_id'][-6:]}")
 
-    print(f"\n✓ All 10 field cards saved to: {reports_dir}/")
+    print(f"\n✓ All {len(fields)} field cards saved to: {reports_dir}/")
 
     return field_data
 
 
 if __name__ == "__main__":
-    main()
+    main(parse_args())

@@ -9,6 +9,8 @@ Input:  canonical farm boundary, soil table, and weather table under the runtime
 Output: farm correlation matrix and plots under the runtime root.
 """
 
+import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -21,34 +23,47 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_SCRIPTS_DIR))
 sys.path.insert(0, str(_SCRIPTS_DIR / "lib"))
 
 from lib.paths import (  # noqa: E402
     farm_boundary_path,
     farm_reports_dir,
+    farm_soil_sample_path,
     farm_summaries_dir,
-    farm_table_path,
     farm_weather_path,
 )
 
-_DEFAULT_GROWER = "default-grower"
-_DEFAULT_FARM = "default-farm"
+_DEFAULT_GROWER = os.environ.get("AG_GROWER_SLUG", "default-grower")
+_DEFAULT_FARM = os.environ.get("AG_FARM_SLUG", "default-farm")
 
 
-def main():
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--grower-slug", default=_DEFAULT_GROWER)
+    parser.add_argument("--farm-slug", default=_DEFAULT_FARM)
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace | None = None) -> pd.DataFrame:
+    if args is None:
+        args = parse_args()
+
     print("=" * 60)
     print("Step 8: Correlation Analysis")
     print("=" * 60)
+    print(f"Grower: {args.grower_slug} | Farm: {args.farm_slug}")
 
-    reports_dir = farm_reports_dir(_DEFAULT_GROWER, _DEFAULT_FARM)
-    summaries_dir = farm_summaries_dir(_DEFAULT_GROWER, _DEFAULT_FARM)
+    reports_dir = farm_reports_dir(args.grower_slug, args.farm_slug)
+    summaries_dir = farm_summaries_dir(args.grower_slug, args.farm_slug)
     reports_dir.mkdir(parents=True, exist_ok=True)
     summaries_dir.mkdir(parents=True, exist_ok=True)
 
-    fields = gpd.read_file(farm_boundary_path(_DEFAULT_GROWER, _DEFAULT_FARM))
-    soil = pd.read_csv(farm_table_path(_DEFAULT_GROWER, _DEFAULT_FARM, "iowa_10_fields_soil.csv"))
+    fields = gpd.read_file(farm_boundary_path(args.grower_slug, args.farm_slug))
+    soil_path = farm_soil_sample_path(args.grower_slug, args.farm_slug)
+    soil = pd.read_csv(soil_path) if soil_path.exists() else pd.DataFrame()
     weather = pd.read_csv(
-        farm_weather_path(_DEFAULT_GROWER, _DEFAULT_FARM),
+        farm_weather_path(args.grower_slug, args.farm_slug),
         parse_dates=["date"],
     )
 
@@ -112,13 +127,14 @@ def main():
     )
 
     plt.tight_layout()
-    heatmap_path = reports_dir / "iowa_correlation_heatmap.png"
+    prefix = args.farm_slug.replace("-", "_")
+    heatmap_path = reports_dir / f"{prefix}_correlation_heatmap.png"
     plt.savefig(heatmap_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"✓ Saved: {heatmap_path}")
 
     # Save correlation matrix
-    correlation_matrix_path = summaries_dir / "iowa_correlation_matrix.csv"
+    correlation_matrix_path = summaries_dir / f"{prefix}_correlation_matrix.csv"
     corr_matrix.to_csv(correlation_matrix_path)
     print(f"✓ Saved: {correlation_matrix_path}")
 
@@ -181,7 +197,7 @@ def main():
 
     plt.suptitle("XY Plots: Soil & Weather Relationships", fontsize=14, fontweight="bold", y=1.02)
     plt.tight_layout()
-    xy_plots_path = reports_dir / "iowa_xy_plots.png"
+    xy_plots_path = reports_dir / f"{prefix}_xy_plots.png"
     plt.savefig(xy_plots_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"✓ Saved: {xy_plots_path}")
@@ -196,4 +212,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(parse_args())

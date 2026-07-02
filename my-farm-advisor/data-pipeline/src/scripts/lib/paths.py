@@ -17,6 +17,11 @@ GROWERS_ROOT = DATA_ROOT / "growers"
 SHARED_ROOT = DATA_ROOT / "shared"
 
 
+def cross_grower_eda_dir() -> Path:
+    """Shared directory for cross-grower EDA artifacts."""
+    return DATA_ROOT / "eda" / "cross_grower"
+
+
 def grower_dir(grower_slug: str) -> Path:
     return GROWERS_ROOT / grower_slug
 
@@ -31,6 +36,14 @@ def grower_manifest_path(grower_slug: str, filename: str = "pipeline_schedule.js
 
 def grower_logs_dir(grower_slug: str) -> Path:
     return grower_dir(grower_slug) / "logs"
+
+
+def grower_maps_dir(grower_slug: str) -> Path:
+    return grower_dir(grower_slug) / "maps"
+
+
+def grower_map_path(grower_slug: str, filename: str = "grower_web_map.html") -> Path:
+    return grower_maps_dir(grower_slug) / filename
 
 
 def farm_dir(grower_slug: str, farm_slug: str) -> Path:
