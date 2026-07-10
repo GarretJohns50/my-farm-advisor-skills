@@ -1,14 +1,13 @@
-"""Extract NDVI time-series from per-scene TIFFs using manifest JSONs.
+"""Extract NDVI time-series from Sentinel-2 per-scene TIFFs using manifest JSON.
 
-Prioritizes Sentinel-2 scenes. Landsat fills gaps only when no Sentinel
-scene exists within +/-5 days of the target date. Filters by cloud cover
-threshold (default 20%).
+Uses Sentinel-2 data exclusively. No Landsat fallback. Filters by cloud
+cover threshold (default 20%).
 """
 
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -16,7 +15,6 @@ from PIL import Image
 
 
 _CLOUD_THRESHOLD = 20.0
-_SENTINEL_PRIORITY_DAYS = 5
 
 
 def _parse_manifest(manifest_path: Path) -> list[dict]:
@@ -73,13 +71,12 @@ def compute_field_ndvi_series(
     runtime_base: Path,
     cloud_threshold: float = _CLOUD_THRESHOLD,
 ) -> list[dict]:
-    """Build a merged NDVI time-series for a single field.
+    """Build an NDVI time-series from Sentinel-2 for a single field.
 
     Parameters
     ----------
     field_dir
-        Absolute path to the field directory (contains satellite/).
-    runtime_base
+        Absolute path to the field directory (contains satellite/sentinel/).    runtime_base
         Absolute path to the data-pipeline runtime root (for resolving
         relative paths in manifest JSON).
     cloud_threshold
@@ -88,42 +85,25 @@ def compute_field_ndvi_series(
     Returns
     -------
     List of dicts with keys: date, doy, mean_ndvi, cloud_cover, source,
-    scene_id, year. Sorted by date. Sentinel prioritized; Landsat used
-    only for gaps.
+    scene_id, year. Sorted by date. Sentinel-2 only.
     """
     satellite_dir = field_dir / "satellite"
     sentinel_manifest = satellite_dir / "sentinel" / "manifest.json"
-    landsat_manifest = satellite_dir / "landsat" / "manifest.json"
 
     sentinel_scenes = _parse_manifest(sentinel_manifest)
-    landsat_scenes = _parse_manifest(landsat_manifest)
 
     # Filter by cloud cover
     sentinel_scenes = [s for s in sentinel_scenes if s["cloud_cover"] <= cloud_threshold]
-    landsat_scenes = [s for s in landsat_scenes if s["cloud_cover"] <= cloud_threshold]
 
-    # Build date-index for Sentinel
+    # Build date-index
     sentinel_by_date: dict[str, dict] = {}
     for s in sentinel_scenes:
         sentinel_by_date[s["date"]] = s
 
-    # Landsat gap-fill: only add Landsat scenes when no Sentinel within +/-5 days
-    merged: dict[str, dict] = dict(sentinel_by_date)
-    for ls in landsat_scenes:
-        ls_date = datetime.strptime(ls["date"], "%Y-%m-%d")
-        has_nearby_sentinel = False
-        for delta in range(-_SENTINEL_PRIORITY_DAYS, _SENTINEL_PRIORITY_DAYS + 1):
-            check_date = (ls_date + timedelta(days=delta)).strftime("%Y-%m-%d")
-            if check_date in sentinel_by_date:
-                has_nearby_sentinel = True
-                break
-        if not has_nearby_sentinel:
-            merged[ls["date"]] = ls
-
     # Read NDVI values and build output records
     results = []
-    for date_str in sorted(merged.keys()):
-        sc = merged[date_str]
+    for date_str in sorted(sentinel_by_date.keys()):
+        sc = sentinel_by_date[date_str]
         ndvi_path = Path(sc["ndvi_path"])
         mean_ndvi = _read_ndvi_mean(ndvi_path, runtime_base)
         if mean_ndvi is None:

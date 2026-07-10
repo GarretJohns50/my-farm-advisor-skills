@@ -4,7 +4,7 @@ Produces a self-contained HTML dashboard for one field, including:
 - Field boundary map with satellite basemap
 - Temperature range chart (°F, from T2M/T2M_MAX/T2M_MIN)
 - Weather charts (GDD, rainfall, cumulative)
-- NDVI time-series chart (Sentinel-prioritized, Landsat gapfill)
+- NDVI time-series chart (Sentinel-2 only)
 - Embedded composite PNG thumbnails (peak-95, cumulative)
 - Crop history table
 - Unified year filter (affects both Temperature and NDVI charts)
@@ -314,7 +314,6 @@ def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
         clouds = [d["cloud_cover"] for d in year_data]
         dates = [d["date"] for d in year_data]
 
-        symbols = ["circle" if s == "sentinel" else "triangle-up" for s in sources]
         sizes = [10 if c <= 10 else 7 for c in clouds]
 
         traces.append({
@@ -325,7 +324,7 @@ def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
             "name": str(year),
             "line": {"color": color, "width": 2},
             "marker": {
-                "symbol": symbols,
+                "symbol": "circle",
                 "size": sizes,
                 "color": color,
                 "line": {"width": 1, "color": "white"},
@@ -334,12 +333,10 @@ def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
                 "<b>%{text}</b><br>"
                 "Day: %{x}<br>"
                 "NDVI: %{y:.4f}<br>"
-                "Cloud: %{customdata}%<br>"
-                "Source: %{meta}<extra></extra>"
+                "Cloud: %{customdata}%<extra></extra>"
             ),
             "text": dates,
             "customdata": clouds,
-            "meta": sources,
             "year": year,
         })
 
@@ -507,7 +504,7 @@ def generate_field_dashboard(
         "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
     }
     ndvi_layout = {
-        "title": {"text": "NDVI Time Series (Sentinel + Landsat)", "font": {"size": 12}},
+        "title": {"text": "NDVI Time Series (Sentinel-2)", "font": {"size": 12}},
         "xaxis": {"title": "Day of year"},
         "yaxis": {"title": "Mean NDVI", "range": [0, 1]},
         "margin": {"l": 50, "r": 20, "t": 40, "b": 40},
@@ -671,7 +668,7 @@ def _build_field_html_body(
         <button class="year-btn global" onclick="setAllYears(true)">All Years</button>
         <button class="year-btn global" onclick="setAllYears(false)">None</button>
     </div>
-    <span class="legend-inline"><span class="legend-symbol">&#9679;</span> Sentinel <span class="legend-symbol">&#9650;</span> Landsat</span>
+    <span class="legend-inline"><span class="legend-symbol">&#9679;</span> Sentinel-2</span>
 </div>
 <div class="map-section">
     <h3>Field Boundary</h3>
