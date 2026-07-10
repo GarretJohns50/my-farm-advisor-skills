@@ -343,6 +343,137 @@ def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
     return traces
 
 
+def _add_stage_lines_to_layout(layout: dict, stage_medians: list[dict]) -> dict:
+    """Add corn growth stage vertical lines and annotations to a Plotly layout."""
+    if "shapes" not in layout:
+        layout["shapes"] = []
+    if "annotations" not in layout:
+        layout["annotations"] = []
+    for stage in stage_medians:
+        median_doy = stage["median_doy"]
+        layout["shapes"].append({
+            "type": "line",
+            "x0": median_doy,
+            "x1": median_doy,
+            "y0": 0,
+            "y1": 1,
+            "yref": "paper",
+            "line": {"color": stage["color"], "width": 1.5, "dash": "dot"},
+        })
+        layout["annotations"].append({
+            "x": median_doy,
+            "y": 1.02,
+            "yref": "paper",
+            "text": f"{stage['stage']}<br>{stage['name']}",
+            "showarrow": False,
+            "font": {"size": 8, "color": stage["color"]},
+            "bgcolor": "rgba(255,255,255,0.8)",
+            "borderpad": 2,
+            "align": "center",
+        })
+    return layout
+
+
+def _build_combined_ndvi_gdd_chart_data(
+    ndvi_series: list[dict], field_weather: list[dict], stage_medians: list[dict]
+) -> tuple[list[dict], dict]:
+    """Build combined NDVI + Cumulative GDD dual-axis chart data.
+
+    Returns (traces, layout).
+    """
+    traces: list[dict] = []
+    years = sorted({d["year"] for d in ndvi_series})
+
+    # Build cumulative GDD lookup by year -> list of (doy, cum_gdd)
+    gdd_by_year: dict[int, list[tuple[int, float]]] = {}
+    for year_rec in field_weather:
+        yr = year_rec["year"]
+        gdd_by_year[yr] = [
+            (d["dayOfYear"], d["cumulativeGdd"]) for d in year_rec.get("daily", [])
+        ]
+
+    for i, year in enumerate(years):
+        color = FIELD_COLORS[i % len(FIELD_COLORS)]
+
+        # NDVI trace (left axis)
+        year_ndvi = [d for d in ndvi_series if d["year"] == year]
+        if year_ndvi:
+            doys = [d["doy"] for d in year_ndvi]
+            ndvis = [d["mean_ndvi"] for d in year_ndvi]
+            clouds = [d["cloud_cover"] for d in year_ndvi]
+            dates = [d["date"] for d in year_ndvi]
+            sizes = [10 if c <= 10 else 7 for c in clouds]
+            traces.append({
+                "type": "scatter",
+                "mode": "lines+markers",
+                "x": doys,
+                "y": ndvis,
+                "name": f"{year} NDVI",
+                "line": {"color": color, "width": 2},
+                "marker": {
+                    "symbol": "circle",
+                    "size": sizes,
+                    "color": color,
+                    "line": {"width": 1, "color": "white"},
+                },
+                "hovertemplate": (
+                    "<b>%{text}</b><br>"
+                    "Day: %{x}<br>"
+                    "NDVI: %{y:.4f}<br>"
+                    "Cloud: %{customdata}%<extra></extra>"
+                ),
+                "text": dates,
+                "customdata": clouds,
+                "year": year,
+            })
+
+        # Cumulative GDD trace (right axis)
+        gdd_points = gdd_by_year.get(year, [])
+        if gdd_points:
+            gdd_doys = [p[0] for p in gdd_points]
+            gdd_vals = [p[1] for p in gdd_points]
+            traces.append({
+                "type": "scatter",
+                "mode": "lines",
+                "x": gdd_doys,
+                "y": gdd_vals,
+                "name": f"{year} GDD",
+                "line": {"color": color, "width": 1.5, "dash": "solid"},
+                "hovertemplate": f"<b>{year}</b><br>Day: %{{x}}<br>Cum GDD: %{{y:.2f}}<extra></extra>",
+                "yaxis": "y2",
+                "year": year,
+            })
+
+    # Max GDD for range
+    max_gdd = 0
+    for pts in gdd_by_year.values():
+        if pts:
+            max_gdd = max(max_gdd, max(p[1] for p in pts))
+    max_gdd = max(max_gdd, 3000)  # At least 3000 to fit stage lines
+
+    layout = {
+        "title": {"text": "NDVI vs Cumulative GDD (with Corn Growth Stages)", "font": {"size": 12}},
+        "xaxis": {"title": "Day of year"},
+        "yaxis": {
+            "title": "NDVI",
+            "side": "left",
+            "range": [0, 1],
+        },
+        "yaxis2": {
+            "title": "Cumulative GDD",
+            "side": "right",
+            "overlaying": "y",
+            "range": [0, max_gdd],
+        },
+        "margin": {"l": 50, "r": 60, "t": 60, "b": 40},
+        "hovermode": "closest",
+        "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
+    }
+    # Add corn growth stage lines
+    layout = _add_stage_lines_to_layout(layout, stage_medians)
+    return traces, layout
+
+
 def _default_chart_layout(title: str, y_title: str | None = None) -> dict:
     lo = {
         "title": {"text": title, "font": {"size": 12}},
@@ -394,34 +525,8 @@ def _build_cum_gdd_layout_with_stages(stage_medians: list[dict]) -> dict:
         "margin": {"l": 50, "r": 20, "t": 60, "b": 40},
         "hovermode": "closest",
         "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
-        "shapes": [],
-        "annotations": [],
     }
-    for stage in stage_medians:
-        median_doy = stage["median_doy"]
-        # Vertical dotted reference line at median DOY
-        lo["shapes"].append({
-            "type": "line",
-            "x0": median_doy,
-            "x1": median_doy,
-            "y0": 0,
-            "y1": 1,
-            "yref": "paper",
-            "line": {"color": stage["color"], "width": 1.5, "dash": "dot"},
-        })
-        # Label at top
-        lo["annotations"].append({
-            "x": median_doy,
-            "y": 1.02,
-            "yref": "paper",
-            "text": f"{stage['stage']}<br>{stage['name']}",
-            "showarrow": False,
-            "font": {"size": 8, "color": stage["color"]},
-            "bgcolor": "rgba(255,255,255,0.8)",
-            "borderpad": 2,
-            "align": "center",
-        })
-    return lo
+    return _add_stage_lines_to_layout(lo, stage_medians)
 
 
 def generate_field_dashboard(
@@ -489,10 +594,11 @@ def generate_field_dashboard(
     gdd_data, rainfall_data, cum_gdd_data, cum_rain_data = _build_weather_charts_single_field(weather_transforms)
     temp_data = _build_temp_chart_data(weather_transforms)
     ndvi_data = _build_ndvi_chart_data(ndvi_series)
+    stage_medians = _compute_stage_median_doys(weather_transforms)
+    combined_data, combined_layout = _build_combined_ndvi_gdd_chart_data(ndvi_series, weather_transforms, stage_medians)
 
     gdd_layout = _default_chart_layout("Daily Growing Degree Days", "GDD")
     rainfall_layout = _default_chart_layout("Daily Rainfall (inches)", "inches")
-    stage_medians = _compute_stage_median_doys(weather_transforms)
     cum_gdd_layout = _build_cum_gdd_layout_with_stages(stage_medians)
     cum_rain_layout = _default_chart_layout("Cumulative Rainfall", "inches")
     temp_layout = {
@@ -543,6 +649,8 @@ def generate_field_dashboard(
         temp_data=temp_data,
         ndvi_layout=ndvi_layout,
         ndvi_data=ndvi_data,
+        combined_layout=combined_layout,
+        combined_data=combined_data,
         composites=composites,
         crop_history=crop_history,
         years=years,
@@ -578,6 +686,8 @@ def _build_field_html_body(
     temp_data: list[dict],
     ndvi_layout: dict,
     ndvi_data: list[dict],
+    combined_layout: dict,
+    combined_data: list[dict],
     composites: list[dict],
     crop_history: list[dict],
     years: list[int],
@@ -643,6 +753,8 @@ def _build_field_html_body(
     temp_data_json = json.dumps(temp_data, default=str)
     ndvi_layout_json = json.dumps(ndvi_layout, default=str)
     ndvi_data_json = json.dumps(ndvi_data, default=str)
+    combined_layout_json = json.dumps(combined_layout, default=str)
+    combined_data_json = json.dumps(combined_data, default=str)
 
     return f"""\
 <!DOCTYPE html>
@@ -697,6 +809,10 @@ def _build_field_html_body(
         <div id="cumulative-rainfall-chart" class="chart-container"></div>
     </div>
 </div>
+<div class="combined-section">
+    <h3>NDVI vs Cumulative GDD (with Corn Growth Stages)</h3>
+    <div id="combined-chart" class="combined-chart-container"></div>
+</div>
 <div class="ndvi-section">
     <h3>NDVI Time Series</h3>
     <div id="ndvi-chart" class="ndvi-chart-container"></div>
@@ -744,6 +860,7 @@ function updateChartVisibility(chartId, years) {{
 function updateAllCharts() {{
     updateChartVisibility('temp-chart', activeYears);
     updateChartVisibility('ndvi-chart', activeYears);
+    updateChartVisibility('combined-chart', activeYears);
 }}
 
 var mapLayout = {map_layout_json};
@@ -773,6 +890,10 @@ Plotly.newPlot('temp-chart', tempData, tempLayout, {{responsive: true}});
 var ndviLayout = {ndvi_layout_json};
 var ndviData = {ndvi_data_json};
 Plotly.newPlot('ndvi-chart', ndviData, ndviLayout, {{responsive: true}});
+
+var combinedLayout = {combined_layout_json};
+var combinedData = {combined_data_json};
+Plotly.newPlot('combined-chart', combinedData, combinedLayout, {{responsive: true}});
 </script>
 </body>
 </html>

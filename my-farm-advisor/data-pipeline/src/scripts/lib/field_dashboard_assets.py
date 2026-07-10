@@ -149,4 +149,15 @@ def _field_css_template() -> str:
     color: #aaa;
     font-size: 0.7rem;
 }
+/* Combined NDVI + GDD chart */
+.combined-section {
+    background: #fff;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    margin: 1rem;
+    padding: 1rem;
+    grid-column: 1 / -1;
+}
+.combined-section h3 { margin: 0 0 0.5rem; font-size: 1.1rem; color: #444; }
+.combined-chart-container { width: 100%; height: 400px; }
 """
