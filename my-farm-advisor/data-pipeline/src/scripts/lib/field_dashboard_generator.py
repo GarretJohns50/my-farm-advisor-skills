@@ -359,8 +359,37 @@ def _default_chart_layout(title: str, y_title: str | None = None) -> dict:
     return lo
 
 
-def _build_cum_gdd_layout_with_stages() -> dict:
-    """Build Cumulative GDD chart layout with corn growth stage reference lines."""
+def _compute_stage_median_doys(field_weather: list[dict]) -> list[dict]:
+    """For each corn growth stage, compute the median DOY across all years.
+
+    Returns a list of stage dicts augmented with 'median_doy'.
+    """
+    stage_medians = []
+    for stage in CORN_GROWTH_STAGES:
+        threshold = stage["gdd"]
+        doys: list[int] = []
+        for year_rec in field_weather:
+            daily = year_rec.get("daily", [])
+            for d in daily:
+                if d.get("cumulativeGdd", 0) >= threshold:
+                    doys.append(d["dayOfYear"])
+                    break
+        if doys:
+            doys.sort()
+            median_doy = doys[len(doys) // 2]
+            stage_medians.append({
+                **stage,
+                "median_doy": median_doy,
+            })
+    return stage_medians
+
+
+def _build_cum_gdd_layout_with_stages(stage_medians: list[dict]) -> dict:
+    """Build Cumulative GDD chart layout with corn growth stage reference lines.
+
+    Stage lines are placed at the median DOY when cumulative GDD first reaches
+    each stage threshold, so they align with the x-axis (Day of year).
+    """
     lo = {
         "title": {"text": "Cumulative GDD (with Corn Growth Stages)", "font": {"size": 12}},
         "xaxis": {"title": "Day of year"},
@@ -371,12 +400,13 @@ def _build_cum_gdd_layout_with_stages() -> dict:
         "shapes": [],
         "annotations": [],
     }
-    for stage in CORN_GROWTH_STAGES:
-        # Vertical dotted reference line
+    for stage in stage_medians:
+        median_doy = stage["median_doy"]
+        # Vertical dotted reference line at median DOY
         lo["shapes"].append({
             "type": "line",
-            "x0": stage["gdd"],
-            "x1": stage["gdd"],
+            "x0": median_doy,
+            "x1": median_doy,
             "y0": 0,
             "y1": 1,
             "yref": "paper",
@@ -384,7 +414,7 @@ def _build_cum_gdd_layout_with_stages() -> dict:
         })
         # Label at top
         lo["annotations"].append({
-            "x": stage["gdd"],
+            "x": median_doy,
             "y": 1.02,
             "yref": "paper",
             "text": f"{stage['stage']}<br>{stage['name']}",
@@ -465,7 +495,8 @@ def generate_field_dashboard(
 
     gdd_layout = _default_chart_layout("Daily Growing Degree Days", "GDD")
     rainfall_layout = _default_chart_layout("Daily Rainfall (inches)", "inches")
-    cum_gdd_layout = _build_cum_gdd_layout_with_stages()
+    stage_medians = _compute_stage_median_doys(weather_transforms)
+    cum_gdd_layout = _build_cum_gdd_layout_with_stages(stage_medians)
     cum_rain_layout = _default_chart_layout("Cumulative Rainfall", "inches")
     temp_layout = {
         "title": {"text": "Daily Temperature Range (°F)", "font": {"size": 12}},
@@ -518,6 +549,7 @@ def generate_field_dashboard(
         composites=composites,
         crop_history=crop_history,
         years=years,
+        stage_medians=stage_medians,
     )
 
     if output_path is None:
@@ -552,6 +584,7 @@ def _build_field_html_body(
     composites: list[dict],
     crop_history: list[dict],
     years: list[int],
+    stage_medians: list[dict],
 ) -> str:
     """Assemble the self-contained HTML for a single-field dashboard."""
     import json
@@ -568,6 +601,21 @@ def _build_field_html_body(
             for c in composites
         )
         composite_html = f'<div class="composite-gallery">{items}</div>'
+
+    stage_legend_html = ""
+    if stage_medians:
+        items = []
+        for i, s in enumerate(stage_medians):
+            items.append(
+                f'<span class="stage-item"><span class="stage-swatch" style="background:{s["color"]}"></span>{s["stage"]} (doy {s["median_doy"]})</span>'
+            )
+        dividers = '<span class="stage-divider">→</span>'
+        stage_legend_html = (
+            '<div class="stage-legend-bar">'
+            '<span class="stage-label">Corn Stages:</span>'
+            + dividers.join(items)
+            + '</div>'
+        )
 
     crop_table_html = ""
     if crop_history:
@@ -645,20 +693,7 @@ def _build_field_html_body(
     <div class="chart-card">
         <h3>Cumulative GDD</h3>
         <div id="cumulative-gdd-chart" class="chart-container"></div>
-        <div class="stage-legend-bar">
-            <span class="stage-label">Corn Stages:</span>
-            <span class="stage-item"><span class="stage-swatch" style="background:#2ca02c"></span>VE 125</span>
-            <span class="stage-divider">→</span>
-            <span class="stage-item"><span class="stage-swatch" style="background:#2ca02c"></span>V6 575</span>
-            <span class="stage-divider">→</span>
-            <span class="stage-item"><span class="stage-swatch" style="background:#ff7f0e"></span>VT 1150</span>
-            <span class="stage-divider">→</span>
-            <span class="stage-item"><span class="stage-swatch" style="background:#d62728"></span>R1 1250</span>
-            <span class="stage-divider">→</span>
-            <span class="stage-item"><span class="stage-swatch" style="background:#9467bd"></span>R3 1925</span>
-            <span class="stage-divider">→</span>
-            <span class="stage-item"><span class="stage-swatch" style="background:#7f7f7f"></span>R6 2700</span>
-        </div>
+        {stage_legend_html}
     </div>
     <div class="chart-card">
         <h3>Cumulative Rainfall (inches)</h3>
