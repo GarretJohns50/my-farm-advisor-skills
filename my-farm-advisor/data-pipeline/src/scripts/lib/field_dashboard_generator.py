@@ -32,6 +32,16 @@ from lib.paths import (
 from lib.runtime_paths import resolve_runtime_paths
 from lib.weather_transforms import compute_weather_transforms, parse_daily_weather
 
+# Corn growth stage GDD thresholds (base 10°C)
+CORN_GROWTH_STAGES: list[dict] = [
+    {"stage": "VE", "name": "Emergence", "gdd": 125, "color": "#2ca02c"},
+    {"stage": "V6", "name": "6-Leaf", "gdd": 575, "color": "#2ca02c"},
+    {"stage": "VT", "name": "Tasseling", "gdd": 1150, "color": "#ff7f0e"},
+    {"stage": "R1", "name": "Silking", "gdd": 1250, "color": "#d62728"},
+    {"stage": "R3", "name": "Milk", "gdd": 1925, "color": "#9467bd"},
+    {"stage": "R6", "name": "Physiological Maturity", "gdd": 2700, "color": "#7f7f7f"},
+]
+
 
 def _load_field_boundary(farm_boundary_path: Path, field_id: str) -> gpd.GeoDataFrame | None:
     """Extract a single field polygon from the farm boundaries GeoJSON."""
@@ -349,6 +359,44 @@ def _default_chart_layout(title: str, y_title: str | None = None) -> dict:
     return lo
 
 
+def _build_cum_gdd_layout_with_stages() -> dict:
+    """Build Cumulative GDD chart layout with corn growth stage reference lines."""
+    lo = {
+        "title": {"text": "Cumulative GDD (with Corn Growth Stages)", "font": {"size": 12}},
+        "xaxis": {"title": "Day of year"},
+        "yaxis": {"title": "GDD"},
+        "margin": {"l": 50, "r": 20, "t": 60, "b": 40},
+        "hovermode": "closest",
+        "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
+        "shapes": [],
+        "annotations": [],
+    }
+    for stage in CORN_GROWTH_STAGES:
+        # Vertical dotted reference line
+        lo["shapes"].append({
+            "type": "line",
+            "x0": stage["gdd"],
+            "x1": stage["gdd"],
+            "y0": 0,
+            "y1": 1,
+            "yref": "paper",
+            "line": {"color": stage["color"], "width": 1.5, "dash": "dot"},
+        })
+        # Label at top
+        lo["annotations"].append({
+            "x": stage["gdd"],
+            "y": 1.02,
+            "yref": "paper",
+            "text": f"{stage['stage']}<br>{stage['name']}",
+            "showarrow": False,
+            "font": {"size": 8, "color": stage["color"]},
+            "bgcolor": "rgba(255,255,255,0.8)",
+            "borderpad": 2,
+            "align": "center",
+        })
+    return lo
+
+
 def generate_field_dashboard(
     farm_dir_path: Path,
     field_id: str,
@@ -417,7 +465,7 @@ def generate_field_dashboard(
 
     gdd_layout = _default_chart_layout("Daily Growing Degree Days", "GDD")
     rainfall_layout = _default_chart_layout("Daily Rainfall (inches)", "inches")
-    cum_gdd_layout = _default_chart_layout("Cumulative GDD", "GDD")
+    cum_gdd_layout = _build_cum_gdd_layout_with_stages()
     cum_rain_layout = _default_chart_layout("Cumulative Rainfall", "inches")
     temp_layout = {
         "title": {"text": "Daily Temperature Range (°F)", "font": {"size": 12}},
@@ -597,6 +645,20 @@ def _build_field_html_body(
     <div class="chart-card">
         <h3>Cumulative GDD</h3>
         <div id="cumulative-gdd-chart" class="chart-container"></div>
+        <div class="stage-legend-bar">
+            <span class="stage-label">Corn Stages:</span>
+            <span class="stage-item"><span class="stage-swatch" style="background:#2ca02c"></span>VE 125</span>
+            <span class="stage-divider">→</span>
+            <span class="stage-item"><span class="stage-swatch" style="background:#2ca02c"></span>V6 575</span>
+            <span class="stage-divider">→</span>
+            <span class="stage-item"><span class="stage-swatch" style="background:#ff7f0e"></span>VT 1150</span>
+            <span class="stage-divider">→</span>
+            <span class="stage-item"><span class="stage-swatch" style="background:#d62728"></span>R1 1250</span>
+            <span class="stage-divider">→</span>
+            <span class="stage-item"><span class="stage-swatch" style="background:#9467bd"></span>R3 1925</span>
+            <span class="stage-divider">→</span>
+            <span class="stage-item"><span class="stage-swatch" style="background:#7f7f7f"></span>R6 2700</span>
+        </div>
     </div>
     <div class="chart-card">
         <h3>Cumulative Rainfall (inches)</h3>

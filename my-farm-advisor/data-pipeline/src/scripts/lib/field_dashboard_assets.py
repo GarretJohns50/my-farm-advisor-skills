@@ -117,4 +117,36 @@ def _field_css_template() -> str:
     margin-left: 1rem;
 }
 .legend-symbol { font-size: 1rem; }
+/* Corn growth stage legend */
+.stage-legend-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #eee;
+    font-size: 0.75rem;
+    color: #555;
+}
+.stage-label {
+    font-weight: bold;
+    margin-right: 0.3rem;
+}
+.stage-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    white-space: nowrap;
+}
+.stage-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.stage-divider {
+    color: #aaa;
+    font-size: 0.7rem;
+}
 """
