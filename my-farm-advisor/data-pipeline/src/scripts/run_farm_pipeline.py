@@ -219,6 +219,12 @@ def main() -> None:
         help="Ignore tile cache and re-download basemap tiles",
     )
     parser.add_argument(
+        "--field-dashboard",
+        type=str,
+        default=None,
+        help="Generate a single-field NDVI dashboard for the given field ID as the final step",
+    )
+    parser.add_argument(
         "--structure-test",
         action="store_true",
         help="Create and verify canonical data tree, then exit",
@@ -294,6 +300,8 @@ def main() -> None:
     ]
     if args.dashboard:
         steps.append(("reporting/generate_weather_dashboard.py", "Weather dashboard"))
+    if args.field_dashboard:
+        steps.append(("reporting/generate_field_dashboard.py", "Field NDVI dashboard"))
 
     all_ok = True
     extra_env = {
@@ -312,6 +320,12 @@ def main() -> None:
     if args.force:
         extra_env["AG_FORCE"] = "1"
     if args.dashboard:
+        if args.no_basemap:
+            extra_env["AG_NO_BASEMAP"] = "1"
+        if args.force_basemap:
+            extra_env["AG_FORCE_BASEMAP"] = "1"
+    if args.field_dashboard:
+        extra_env["AG_FIELD_ID"] = args.field_dashboard
         if args.no_basemap:
             extra_env["AG_NO_BASEMAP"] = "1"
         if args.force_basemap:

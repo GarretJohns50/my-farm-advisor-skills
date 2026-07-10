@@ -184,6 +184,35 @@ Dashboard runtime directory discovery (in precedence order):
 
 Dashboard output path: `growers/<grower>/farms/<farm>/derived/dashboards/<farm>_dashboard.html`
 
+Generate a single-field NDVI dashboard from the pipeline (opt-in, final step):
+
+```bash
+export DATA_PIPELINE_DATA_ROOT=/absolute/path/to/my-farm-advisor-runtime
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/run_farm_pipeline.py \
+  --grower-slug central-ne-grower \
+  --farm-slug central-ne-grower-nebraska \
+  --farm-name "Central NE Grower Nebraska" \
+  --field-dashboard osm-554305501 \
+  --no-basemap
+```
+
+Generate the single-field dashboard standalone:
+
+```bash
+export DATA_PIPELINE_DATA_ROOT=/absolute/path/to/my-farm-advisor-runtime
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/field_dashboard_cli.py field-dashboard generate \
+  --grower-slug central-ne-grower \
+  --farm-slug central-ne-grower-nebraska \
+  --field-id osm-554305501 \
+  --no-basemap
+```
+
+Field dashboard output path: `fields/<field-id>/derived/dashboards/<field-id>_dashboard.html`
+
 ## Local workflow notes
 
 - Keep this skill tiny and operational: copy baseline files from `src/` into live storage, preserve live data across reboot or redeploy, and use auditable `rsync` commands.

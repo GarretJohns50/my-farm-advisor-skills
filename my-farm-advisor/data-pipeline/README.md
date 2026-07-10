@@ -220,3 +220,52 @@ Dashboards are written to `growers/<grower>/farms/<farm>/derived/dashboards/<far
 - **Field + Year dropdown filters** — toggle visibility without re-rendering
 - **Reset button** — restore all traces
 - **Colorblind-safe palette** — 10 distinguishable colors per field
+
+## Single-Field NDVI Dashboard
+
+For deep analysis of an individual field, generate a focused dashboard that
+combines weather data with per-scene NDVI time series from Sentinel-2
+(prioritized) and Landsat (gap-filled). The dashboard embeds derived
+composite images (peak-95 NDVI, cumulative season NDVI) and a crop history
+table.
+
+### Pipeline integration
+
+Add `--field-dashboard <field-id>` as the final step:
+
+```bash
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/run_farm_pipeline.py \
+  --grower-slug central-ne-grower \
+  --farm-slug central-ne-grower-nebraska \
+  --farm-name "Central NE Grower Nebraska" \
+  --field-dashboard osm-554305501 \
+  --no-basemap
+```
+
+### Standalone CLI
+
+```bash
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/field_dashboard_cli.py field-dashboard generate \
+  --grower-slug central-ne-grower \
+  --farm-slug central-ne-grower-nebraska \
+  --field-id osm-554305501 \
+  --no-basemap
+```
+
+### Output
+
+`fields/<field-id>/derived/dashboards/<field-id>_dashboard.html`
+
+### Dashboard features
+
+- **Field boundary map** — single polygon with satellite basemap
+- **Weather charts (4 panels)** — GDD, rainfall, cumulative GDD, cumulative rainfall
+- **NDVI time-series** — one trace per year, Sentinel circles vs Landsat triangles, cloud-cover sized markers
+- **Year filter buttons** — toggle individual years on the NDVI chart
+- **Embedded composite images** — corn peak-95 NDVI map, cumulative season NDVI (base64 PNGs)
+- **Crop history table** — year, crop, scene count, peak NDVI
+- **Colorblind-safe** — years differentiated by color, satellites by marker shape
