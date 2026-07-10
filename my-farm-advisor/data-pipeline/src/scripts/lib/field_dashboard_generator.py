@@ -1360,12 +1360,16 @@ def _build_field_html_body(
     for e in events_2025:
         type_counts[e["type"]] = type_counts.get(e["type"], 0) + 1
     event_chips = []
+    # "All" chip — active by default
+    event_chips.append(
+        f'<button class="event-chip active" data-filter="all" onclick="filterEvents(\'all\')">All ({len(events_2025)})</button>'
+    )
     for etype, count in sorted(type_counts.items()):
         sev = "moderate" if any(e["severity"] == "moderate" for e in events_2025 if e["type"] == etype) else "mild"
         if any(e["severity"] == "severe" for e in events_2025 if e["type"] == etype):
             sev = "severe"
         event_chips.append(
-            f'<span class="event-chip {sev}">{event_type_icons.get(etype, "")} {count} {event_type_labels.get(etype, etype)}</span>'
+            f'<button class="event-chip {sev}" data-filter="{etype}" onclick="filterEvents(\'{etype}\')">{event_type_icons.get(etype, "")} {count} {event_type_labels.get(etype, etype)}</button>'
         )
     from datetime import datetime
 
@@ -1384,7 +1388,7 @@ def _build_field_html_body(
             end_fmt = _fmt_date(e["end_date"])
             date_range = start_fmt if e["start_date"] == e["end_date"] else f"{start_fmt} – {end_fmt}"
             cards.append(
-                f'<div class="event-card {sev}" onclick="toggleEventDetail(this)">'
+                f'<div class="event-card {sev}" data-event-type="{e["type"]}" onclick="toggleEventDetail(this)">'
                 f'<div class="event-header">'
                 f'<span class="event-title">{event_type_icons.get(e["type"], "")} {e["display_name"]}'
                 f'<span class="severity-badge {sev}">{sev}</span></span>'
@@ -1398,12 +1402,12 @@ def _build_field_html_body(
         events_grid_html = "\n".join(cards)
         events_summary_html = f"""\
 <div class="events-panel">
-    <div class="events-summary" onclick="toggleEventsPanel()">
+    <div class="events-summary">
         <div class="events-chips">
-            <strong>2025 Critical Events ({len(events_2025)} detected):</strong>
+            <strong>2025 Critical Events:</strong>
             {chips}
         </div>
-        <button class="expand-btn" id="events-expand-btn">&#9660; Expand</button>
+        <button class="expand-btn" id="events-expand-btn" onclick="toggleEventsPanel()">&#9660; Expand</button>
     </div>
     <div class="events-grid collapsed" id="events-grid">
         {events_grid_html}
@@ -1660,6 +1664,15 @@ function toggleEventsPanel() {{
         grid.classList.add('collapsed');
         btn.innerHTML = '&#9660; Expand';
     }}
+}}
+
+function filterEvents(type) {{
+    document.querySelectorAll('.event-card').forEach(function(card) {{
+        card.style.display = (type === 'all' || card.dataset.eventType === type) ? 'block' : 'none';
+    }});
+    document.querySelectorAll('.event-chip').forEach(function(chip) {{
+        chip.classList.toggle('active', chip.dataset.filter === type);
+    }});
 }}
 
 function toggleEventDetail(card) {{

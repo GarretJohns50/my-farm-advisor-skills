@@ -196,7 +196,6 @@ def _field_css_template() -> str:
     display: flex;
     align-items: center;
     justify-content: space-between;
-    cursor: pointer;
     user-select: none;
 }
 .events-chips {
@@ -215,9 +214,18 @@ def _field_css_template() -> str:
     padding: 0.25rem 0.6rem;
     font-size: 0.8rem;
     color: #444;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
 }
+.event-chip:hover:not(.active) { background: #e8e8e8; }
+.event-chip.active { background: #1a472a; color: #fff; border-color: #1a472a; }
 .event-chip.severe { background: #ffebee; border-color: #ef5350; color: #c62828; }
+.event-chip.severe.active { background: #c62828; border-color: #c62828; color: #fff; }
 .event-chip.moderate { background: #fff3e0; border-color: #ffa726; color: #ef6c00; }
+.event-chip.moderate.active { background: #ef6c00; border-color: #ef6c00; color: #fff; }
+.event-chip.mild { background: #e8f5e9; border-color: #2ca02c; color: #2e7d32; }
+.event-chip.mild.active { background: #2e7d32; border-color: #2e7d32; color: #fff; }
 .expand-btn {
     background: none;
     border: none;
