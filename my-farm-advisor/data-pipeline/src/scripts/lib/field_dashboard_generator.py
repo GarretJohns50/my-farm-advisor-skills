@@ -593,7 +593,6 @@ def generate_field_dashboard(
     map_data, map_layout = _build_field_map_data(gdf, basemap_b64, mercator_extent, weather_transforms)
     gdd_data, rainfall_data, cum_gdd_data, cum_rain_data = _build_weather_charts_single_field(weather_transforms)
     temp_data = _build_temp_chart_data(weather_transforms)
-    ndvi_data = _build_ndvi_chart_data(ndvi_series)
     stage_medians = _compute_stage_median_doys(weather_transforms)
     combined_data, combined_layout = _build_combined_ndvi_gdd_chart_data(ndvi_series, weather_transforms, stage_medians)
 
@@ -605,14 +604,6 @@ def generate_field_dashboard(
         "title": {"text": "Daily Temperature Range (°F)", "font": {"size": 12}},
         "xaxis": {"title": "Day of year"},
         "yaxis": {"title": "Temperature (°F)"},
-        "margin": {"l": 50, "r": 20, "t": 40, "b": 40},
-        "hovermode": "closest",
-        "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
-    }
-    ndvi_layout = {
-        "title": {"text": "NDVI Time Series (Sentinel-2)", "font": {"size": 12}},
-        "xaxis": {"title": "Day of year"},
-        "yaxis": {"title": "Mean NDVI", "range": [0, 1]},
         "margin": {"l": 50, "r": 20, "t": 40, "b": 40},
         "hovermode": "closest",
         "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
@@ -647,8 +638,6 @@ def generate_field_dashboard(
         cumulative_rainfall_data=cum_rain_data,
         temp_layout=temp_layout,
         temp_data=temp_data,
-        ndvi_layout=ndvi_layout,
-        ndvi_data=ndvi_data,
         combined_layout=combined_layout,
         combined_data=combined_data,
         composites=composites,
@@ -684,8 +673,6 @@ def _build_field_html_body(
     cumulative_rainfall_data: list[dict],
     temp_layout: dict,
     temp_data: list[dict],
-    ndvi_layout: dict,
-    ndvi_data: list[dict],
     combined_layout: dict,
     combined_data: list[dict],
     composites: list[dict],
@@ -751,8 +738,6 @@ def _build_field_html_body(
     cum_rain_data_json = json.dumps(cumulative_rainfall_data, default=str)
     temp_layout_json = json.dumps(temp_layout, default=str)
     temp_data_json = json.dumps(temp_data, default=str)
-    ndvi_layout_json = json.dumps(ndvi_layout, default=str)
-    ndvi_data_json = json.dumps(ndvi_data, default=str)
     combined_layout_json = json.dumps(combined_layout, default=str)
     combined_data_json = json.dumps(combined_data, default=str)
 
@@ -812,10 +797,6 @@ def _build_field_html_body(
 <div class="combined-section">
     <h3>NDVI vs Cumulative GDD (with Corn Growth Stages)</h3>
     <div id="combined-chart" class="combined-chart-container"></div>
-</div>
-<div class="ndvi-section">
-    <h3>NDVI Time Series</h3>
-    <div id="ndvi-chart" class="ndvi-chart-container"></div>
     {composite_html}
 </div>
 {crop_table_html}
@@ -859,7 +840,6 @@ function updateChartVisibility(chartId, years) {{
 
 function updateAllCharts() {{
     updateChartVisibility('temp-chart', activeYears);
-    updateChartVisibility('ndvi-chart', activeYears);
     updateChartVisibility('combined-chart', activeYears);
 }}
 
@@ -886,10 +866,6 @@ Plotly.newPlot('cumulative-rainfall-chart', crData, crLayout, {{responsive: true
 var tempLayout = {temp_layout_json};
 var tempData = {temp_data_json};
 Plotly.newPlot('temp-chart', tempData, tempLayout, {{responsive: true}});
-
-var ndviLayout = {ndvi_layout_json};
-var ndviData = {ndvi_data_json};
-Plotly.newPlot('ndvi-chart', ndviData, ndviLayout, {{responsive: true}});
 
 var combinedLayout = {combined_layout_json};
 var combinedData = {combined_data_json};
