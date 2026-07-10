@@ -367,7 +367,7 @@ def _build_solar_chart_data(field_weather: list[dict]) -> list[dict]:
             "y": solar,
             "name": str(year),
             "line": {"color": color, "width": 1.5},
-            "hovertemplate": f"<b>{year}</b><br>Day: %{{x}}<br>Solar: %{{y:.2f}} kWh/m²<extra></extra>",
+            "hovertemplate": f"<b>{year}</b><br>Day: %{{x}}<br>Solar: %{{y:.2f}} MJ/m²<extra></extra>",
             "year": year,
         })
     return traces
@@ -378,21 +378,21 @@ def _build_solar_layout() -> dict:
     return {
         "title": {"text": "Solar Radiation", "font": {"size": 12}},
         "xaxis": {"title": "Day of year"},
-        "yaxis": {"title": "kWh/m²/day"},
+        "yaxis": {"title": "MJ/m²/day"},
         "shapes": [{
             "type": "line",
             "x0": 0,
             "x1": 1,
             "xref": "paper",
-            "y0": 2.6,
-            "y1": 2.6,
+            "y0": 18,
+            "y1": 18,
             "line": {"color": "#999", "width": 1.5, "dash": "dash"},
         }],
         "annotations": [{
             "x": 1.0,
             "xref": "paper",
-            "y": 2.6,
-            "text": "Low threshold: 2.6",
+            "y": 18,
+            "text": "Low threshold: 18",
             "showarrow": False,
             "font": {"size": 9, "color": "#666"},
             "xanchor": "right",
@@ -938,7 +938,7 @@ def _build_field_html_body(
     <div class="chart-card">
         <h3>Solar Radiation</h3>
         <div id="solar-chart" class="chart-container"></div>
-        <p class="chart-note">&lt; 2.6 kWh/m² considered low</p>
+        <p class="chart-note">&lt; 18 MJ/m² considered low</p>
     </div>
 </div>
 <div class="combined-section">
