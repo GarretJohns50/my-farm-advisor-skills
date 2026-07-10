@@ -441,7 +441,7 @@ def _build_solar_layout() -> dict:
     """Build solar chart layout with low-radiation threshold line."""
     return {
         "title": {"text": "Solar Radiation", "font": {"size": 12}},
-        "xaxis": {"title": "Day of year"},
+        "xaxis": {"title": "Day of year", "range": [60, 305]},
         "yaxis": {"title": "MJ/m²/day"},
         "shapes": [{
             "type": "line",
@@ -625,7 +625,7 @@ def _build_combined_ndvi_gdd_chart_data(
 
     layout = {
         "title": {"text": "NDVI vs Cumulative GDD (with Corn Growth Stages)", "font": {"size": 12}},
-        "xaxis": {"title": "Day of year"},
+        "xaxis": {"title": "Day of year", "range": [60, 305]},
         "yaxis": {
             "title": "NDVI",
             "side": "left",
@@ -646,7 +646,7 @@ def _build_combined_ndvi_gdd_chart_data(
     return traces, layout
 
 
-def _default_chart_layout(title: str, y_title: str | None = None) -> dict:
+def _default_chart_layout(title: str, y_title: str | None = None, x_range: tuple[int, int] | None = None) -> dict:
     lo = {
         "title": {"text": title, "font": {"size": 12}},
         "xaxis": {"title": "Day of year"},
@@ -656,6 +656,8 @@ def _default_chart_layout(title: str, y_title: str | None = None) -> dict:
     }
     if y_title:
         lo["yaxis"] = {"title": y_title}
+    if x_range:
+        lo["xaxis"]["range"] = list(x_range)
     return lo
 
 
@@ -692,7 +694,7 @@ def _build_cum_gdd_layout_with_stages(stage_medians: list[dict]) -> dict:
     """
     lo = {
         "title": {"text": "Cumulative GDD (with Corn Growth Stages)", "font": {"size": 12}},
-        "xaxis": {"title": "Day of year"},
+        "xaxis": {"title": "Day of year", "range": [60, 305]},
         "yaxis": {"title": "GDD"},
         "margin": {"l": 50, "r": 20, "t": 60, "b": 40},
         "hovermode": "closest",
@@ -771,15 +773,15 @@ def generate_field_dashboard(
     anomaly_data, anomaly_layout = _build_rainfall_anomaly_chart_data(weather_transforms)
     solar_data = _build_solar_chart_data(weather_transforms)
 
-    gdd_layout = _default_chart_layout("Daily Growing Degree Days", "GDD")
-    rainfall_layout = _default_chart_layout("Daily Rainfall (inches)", "inches")
+    gdd_layout = _default_chart_layout("Daily Growing Degree Days", "GDD", x_range=(60, 305))
+    rainfall_layout = _default_chart_layout("Daily Rainfall (inches)", "inches", x_range=(60, 305))
     cum_gdd_layout = _build_cum_gdd_layout_with_stages(stage_medians)
-    cum_rain_layout = _default_chart_layout("Cumulative Rainfall", "inches")
-    heat_layout = _default_chart_layout("Heat Stress", "°F above 86°F")
+    cum_rain_layout = _default_chart_layout("Cumulative Rainfall", "inches", x_range=(60, 305))
+    heat_layout = _default_chart_layout("Heat Stress", "°F above 86°F", x_range=(60, 305))
     solar_layout = _build_solar_layout()
     temp_layout = {
         "title": {"text": "Daily Temperature Range (°F)", "font": {"size": 12}},
-        "xaxis": {"title": "Day of year"},
+        "xaxis": {"title": "Day of year", "range": [60, 305]},
         "yaxis": {"title": "Temperature (°F)"},
         "margin": {"l": 50, "r": 20, "t": 40, "b": 40},
         "hovermode": "closest",
