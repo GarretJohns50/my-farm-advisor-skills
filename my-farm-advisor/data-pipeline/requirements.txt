@@ -23,6 +23,8 @@ fsspec[http]>=2024.3
 matplotlib>=3.8
 seaborn>=0.13
 contextily>=1.6
+plotly>=5.18
+pillow>=10.0
 
 # General utilities
 requests>=2.31

@@ -151,6 +151,39 @@ cd ../..
 ./scripts/validate.sh
 ```
 
+Generate the interactive weather dashboard from the pipeline (opt-in, final step):
+
+```bash
+export DATA_PIPELINE_DATA_ROOT=/absolute/path/to/my-farm-advisor-runtime
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/run_farm_pipeline.py \
+  --grower-slug il-dekalb-grower \
+  --farm-slug dekalb-demo-farm \
+  --farm-name "DeKalb Demo Farm" \
+  --dashboard \
+  --no-basemap
+```
+
+Generate the dashboard standalone (outside the full pipeline):
+
+```bash
+export DATA_PIPELINE_DATA_ROOT=/absolute/path/to/my-farm-advisor-runtime
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/dashboard_cli.py dashboard generate \
+  --farm-dir "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/growers/il-dekalb-grower/farms/dekalb-demo-farm" \
+  --no-basemap
+```
+
+Dashboard runtime directory discovery (in precedence order):
+1. `--farm-dir` (explicit single farm)
+2. `--growers-dir` (explicit growers directory; errors if >1 farm)
+3. `DATA_PIPELINE_DATA_ROOT` environment variable
+4. Auto-scan under `~` for `my-farm-advisor-runtime/data-pipeline`
+
+Dashboard output path: `growers/<grower>/farms/<farm>/derived/dashboards/<farm>_dashboard.html`
+
 ## Local workflow notes
 
 - Keep this skill tiny and operational: copy baseline files from `src/` into live storage, preserve live data across reboot or redeploy, and use auditable `rsync` commands.

@@ -204,6 +204,21 @@ def main() -> None:
     )
     parser.add_argument("--force", action="store_true", help="Force rerun all steps")
     parser.add_argument(
+        "--dashboard",
+        action="store_true",
+        help="Generate the interactive weather dashboard as the final pipeline step",
+    )
+    parser.add_argument(
+        "--no-basemap",
+        action="store_true",
+        help="Skip satellite basemap in dashboard generation",
+    )
+    parser.add_argument(
+        "--force-basemap",
+        action="store_true",
+        help="Ignore tile cache and re-download basemap tiles",
+    )
+    parser.add_argument(
         "--structure-test",
         action="store_true",
         help="Create and verify canonical data tree, then exit",
@@ -277,6 +292,8 @@ def main() -> None:
         ("reporting/generate_farm_html.py", "Self-contained HTML report"),
         ("reporting/generate_farm_markdown.py", "Markdown report"),
     ]
+    if args.dashboard:
+        steps.append(("reporting/generate_weather_dashboard.py", "Weather dashboard"))
 
     all_ok = True
     extra_env = {
@@ -294,6 +311,11 @@ def main() -> None:
         extra_env["AG_WEATHER_CSV"] = str(_runtime_path(args.weather_csv))
     if args.force:
         extra_env["AG_FORCE"] = "1"
+    if args.dashboard:
+        if args.no_basemap:
+            extra_env["AG_NO_BASEMAP"] = "1"
+        if args.force_basemap:
+            extra_env["AG_FORCE_BASEMAP"] = "1"
     for script, label in steps:
         _update_grower_manifest(
             grower_manifest,

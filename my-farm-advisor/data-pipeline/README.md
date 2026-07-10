@@ -160,3 +160,63 @@ bash -lc 'export DATA_PIPELINE_DATA_ROOT=/absolute/path/to/my-farm-advisor-runti
 
 This ensures every pipeline step (including geopandas/rasterio operations) uses
 the shared environment that lives alongside the replicated scripts.
+
+## Weather Dashboard
+
+The pipeline can generate an interactive, self-contained weather dashboard as an
+optional final step. The dashboard is a single HTML file with zero runtime
+external dependencies (no CDN, no API calls). Plotly.js is vendored/inline at
+build time; satellite basemap tiles are fetched at generation time and
+base64-encoded.
+
+### Pipeline integration
+
+Add `--dashboard` to `run_farm_pipeline.py`:
+
+```bash
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/run_farm_pipeline.py \
+  --grower-slug il-dekalb-grower \
+  --farm-slug dekalb-demo-farm \
+  --farm-name "DeKalb Demo Farm" \
+  --dashboard \
+  --no-basemap
+```
+
+Flags:
+- `--dashboard` — append weather dashboard generation as the final pipeline step
+- `--no-basemap` — skip satellite imagery, use a neutral background
+- `--force-basemap` — ignore tile cache and re-download basemap tiles
+
+### Standalone CLI
+
+Generate a dashboard outside the full pipeline:
+
+```bash
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/dashboard_cli.py dashboard generate \
+  --farm-dir "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/growers/central-ia-grower/farms/central-ia-grower-iowa" \
+  --no-basemap
+```
+
+The CLI supports runtime directory discovery: explicit `--farm-dir` → `--growers-dir` →
+`DATA_PIPELINE_DATA_ROOT` env var → auto-scan under `~`. When multiple farms exist,
+the CLI errors clearly and lists candidates so you can select one explicitly.
+
+### Output
+
+Dashboards are written to `growers/<grower>/farms/<farm>/derived/dashboards/<farm>_dashboard.html`.
+
+### Dashboard features
+
+- **Field boundary map** — interactive Plotly scattermap with fill and labels
+- **Last frost marker** — per-field-year last frost date tooltip
+- **Daily GDD chart** — growing degree days (base 10°C) from last frost
+- **Daily rainfall chart** — rainfall in inches from last frost
+- **Cumulative GDD** — running total of heat units
+- **Cumulative rainfall** — running total of precipitation
+- **Field + Year dropdown filters** — toggle visibility without re-rendering
+- **Reset button** — restore all traces
+- **Colorblind-safe palette** — 10 distinguishable colors per field
