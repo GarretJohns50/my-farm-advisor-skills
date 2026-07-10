@@ -987,6 +987,10 @@ function updateChartVisibility(chartId, years) {{
 
 function updateAllCharts() {{
     updateChartVisibility('temp-chart', activeYears);
+    updateChartVisibility('gdd-chart', activeYears);
+    updateChartVisibility('rainfall-chart', activeYears);
+    updateChartVisibility('cumulative-gdd-chart', activeYears);
+    updateChartVisibility('cumulative-rainfall-chart', activeYears);
     updateChartVisibility('combined-chart', activeYears);
     updateChartVisibility('heat-chart', activeYears);
     updateChartVisibility('deficit-chart', activeYears);
