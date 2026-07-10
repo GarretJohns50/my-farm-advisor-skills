@@ -321,30 +321,94 @@ def _build_heat_stress_chart_data(field_weather: list[dict]) -> list[dict]:
     return traces
 
 
-def _build_moisture_deficit_chart_data(field_weather: list[dict]) -> list[dict]:
-    """Build cumulative moisture deficit line chart data."""
+def _build_rainfall_anomaly_chart_data(field_weather: list[dict]) -> tuple[list[dict], dict]:
+    """Build monthly rainfall anomaly bar chart (Mar–Oct).
+
+    For each month, computes the 5-year average monthly rainfall, then
+    shows each year's deviation from that average. Surplus (green) and
+    deficit (red) bars are grouped by month.
+    """
     if not field_weather:
-        return []
+        return [], {}
+
+    months = list(range(3, 11))  # Mar–Oct
+    month_names = {3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
+                   7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct"}
+
+    # monthly_totals[year][month] = total inches
+    monthly_totals: dict[int, dict[int, float]] = {}
+    for year_rec in field_weather:
+        year = year_rec["year"]
+        daily = year_rec.get("daily", [])
+        monthly_totals[year] = {}
+        for month in months:
+            month_days = [d for d in daily if int(d["date"].split("-")[1]) == month]
+            total = sum(d.get("dailyRainfallIn", 0.0) for d in month_days)
+            monthly_totals[year][month] = round(total, 2)
+
+    # 5-year average per month
+    month_avg: dict[int, float] = {}
+    for month in months:
+        totals = [monthly_totals[yr][month] for yr in monthly_totals]
+        month_avg[month] = sum(totals) / len(totals)
+
     traces = []
     for i, year_rec in enumerate(field_weather):
         year = year_rec["year"]
-        daily = year_rec.get("daily", [])
-        if not daily:
-            continue
-        color = FIELD_COLORS[i % len(FIELD_COLORS)]
-        doys = [d["dayOfYear"] for d in daily]
-        deficit = [d.get("cumulativeDeficit", 0.0) for d in daily]
+        xs = []
+        ys = []
+        colors = []
+        customdata = []
+        for month in months:
+            actual = monthly_totals[year][month]
+            avg = month_avg[month]
+            anomaly = actual - avg
+            xs.append(month)
+            ys.append(round(anomaly, 2))
+            colors.append("#2ca02c" if anomaly >= 0 else "#d62728")
+            customdata.append([actual, round(avg, 2)])
         traces.append({
-            "type": "scatter",
-            "mode": "lines",
-            "x": doys,
-            "y": deficit,
+            "type": "bar",
+            "x": xs,
+            "y": ys,
             "name": str(year),
-            "line": {"color": color, "width": 2},
-            "hovertemplate": f"<b>{year}</b><br>Day: %{{x}}<br>Deficit: %{{y:.2f}} in<extra></extra>",
+            "marker": {"color": colors},
+            "hovertemplate": (
+                f"<b>{year}</b><br>"
+                "%{text}<br>"
+                "Anomaly: %{y:.2f} in<br>"
+                "Actual: %{customdata[0]:.2f} in | Avg: %{customdata[1]:.2f} in"
+                "<extra></extra>"
+            ),
+            "text": [month_names[m] for m in xs],
+            "customdata": customdata,
             "year": year,
         })
-    return traces
+
+    layout = {
+        "title": {"text": "Monthly Rainfall Anomaly (Mar–Oct)", "font": {"size": 12}},
+        "xaxis": {
+            "title": "Month",
+            "tickmode": "array",
+            "tickvals": months,
+            "ticktext": [month_names[m] for m in months],
+        },
+        "yaxis": {"title": "Rainfall anomaly (inches)"},
+        "barmode": "group",
+        "shapes": [{
+            "type": "line",
+            "x0": 0,
+            "x1": 1,
+            "xref": "paper",
+            "y0": 0,
+            "y1": 0,
+            "line": {"color": "#000", "width": 2},
+        }],
+        "margin": {"l": 50, "r": 20, "t": 40, "b": 40},
+        "hovermode": "closest",
+        "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
+    }
+    return traces, layout
 
 
 def _build_solar_chart_data(field_weather: list[dict]) -> list[dict]:
@@ -704,7 +768,7 @@ def generate_field_dashboard(
     stage_medians = _compute_stage_median_doys(weather_transforms)
     combined_data, combined_layout = _build_combined_ndvi_gdd_chart_data(ndvi_series, weather_transforms, stage_medians)
     heat_data = _build_heat_stress_chart_data(weather_transforms)
-    deficit_data = _build_moisture_deficit_chart_data(weather_transforms)
+    anomaly_data, anomaly_layout = _build_rainfall_anomaly_chart_data(weather_transforms)
     solar_data = _build_solar_chart_data(weather_transforms)
 
     gdd_layout = _default_chart_layout("Daily Growing Degree Days", "GDD")
@@ -712,7 +776,6 @@ def generate_field_dashboard(
     cum_gdd_layout = _build_cum_gdd_layout_with_stages(stage_medians)
     cum_rain_layout = _default_chart_layout("Cumulative Rainfall", "inches")
     heat_layout = _default_chart_layout("Heat Stress", "°F above 86°F")
-    deficit_layout = _default_chart_layout("Cumulative Moisture Deficit", "inches")
     solar_layout = _build_solar_layout()
     temp_layout = {
         "title": {"text": "Daily Temperature Range (°F)", "font": {"size": 12}},
@@ -756,8 +819,8 @@ def generate_field_dashboard(
         combined_data=combined_data,
         heat_layout=heat_layout,
         heat_data=heat_data,
-        deficit_layout=deficit_layout,
-        deficit_data=deficit_data,
+        anomaly_layout=anomaly_layout,
+        anomaly_data=anomaly_data,
         solar_layout=solar_layout,
         solar_data=solar_data,
         composites=composites,
@@ -797,8 +860,8 @@ def _build_field_html_body(
     combined_data: list[dict],
     heat_layout: dict,
     heat_data: list[dict],
-    deficit_layout: dict,
-    deficit_data: list[dict],
+    anomaly_layout: dict,
+    anomaly_data: list[dict],
     solar_layout: dict,
     solar_data: list[dict],
     composites: list[dict],
@@ -868,8 +931,8 @@ def _build_field_html_body(
     combined_data_json = json.dumps(combined_data, default=str)
     heat_layout_json = json.dumps(heat_layout, default=str)
     heat_data_json = json.dumps(heat_data, default=str)
-    deficit_layout_json = json.dumps(deficit_layout, default=str)
-    deficit_data_json = json.dumps(deficit_data, default=str)
+    anomaly_layout_json = json.dumps(anomaly_layout, default=str)
+    anomaly_data_json = json.dumps(anomaly_data, default=str)
     solar_layout_json = json.dumps(solar_layout, default=str)
     solar_data_json = json.dumps(solar_data, default=str)
 
@@ -932,8 +995,8 @@ def _build_field_html_body(
         <div id="heat-chart" class="chart-container"></div>
     </div>
     <div class="chart-card">
-        <h3>Moisture Deficit</h3>
-        <div id="deficit-chart" class="chart-container"></div>
+        <h3>Rainfall Anomaly</h3>
+        <div id="anomaly-chart" class="chart-container"></div>
     </div>
     <div class="chart-card">
         <h3>Solar Radiation</h3>
@@ -993,7 +1056,7 @@ function updateAllCharts() {{
     updateChartVisibility('cumulative-rainfall-chart', activeYears);
     updateChartVisibility('combined-chart', activeYears);
     updateChartVisibility('heat-chart', activeYears);
-    updateChartVisibility('deficit-chart', activeYears);
+    updateChartVisibility('anomaly-chart', activeYears);
     updateChartVisibility('solar-chart', activeYears);
 }}
 
@@ -1029,9 +1092,9 @@ var heatLayout = {heat_layout_json};
 var heatData = {heat_data_json};
 Plotly.newPlot('heat-chart', heatData, heatLayout, {{responsive: true}});
 
-var deficitLayout = {deficit_layout_json};
-var deficitData = {deficit_data_json};
-Plotly.newPlot('deficit-chart', deficitData, deficitLayout, {{responsive: true}});
+var anomalyLayout = {anomaly_layout_json};
+var anomalyData = {anomaly_data_json};
+Plotly.newPlot('anomaly-chart', anomalyData, anomalyLayout, {{responsive: true}});
 
 var solarLayout = {solar_layout_json};
 var solarData = {solar_data_json};
