@@ -115,6 +115,7 @@ def compute_weather_transforms(df: pd.DataFrame) -> list[dict]:
                 "dailyDeficit": round(float(row["dailyDeficit"]), 2),
                 "cumulativeDeficit": round(float(row["cumulativeDeficit"]), 2),
                 "solarRadiation": round(float(row["ALLSKY_SFC_SW_DWN"]), 2) if "ALLSKY_SFC_SW_DWN" in growing.columns else 0.0,
+                "windSpeedMph": round(float(row["WS10M"]) * 2.23694, 1) if "WS10M" in growing.columns else 0.0,
             })
 
         results.append({
