@@ -87,10 +87,17 @@ def compute_weather_transforms(df: pd.DataFrame) -> list[dict]:
         # Daily calculations
         growing["dailyGdd"] = ((growing["T2M_MAX"] + growing["T2M_MIN"]) / 2.0 - 10.0).clip(lower=0.0)
         growing["dailyRainfallIn"] = growing["PRECTOTCORR"] * 0.0393701
+        # Heat stress: degrees above 86°F (30°C)
+        growing["heatStress"] = (growing["T2M_MAX"] * 9.0 / 5.0 + 32.0 - 86.0).clip(lower=0.0)
+        # ET estimate (inches/day): GDD * 0.02
+        growing["etEstimate"] = growing["dailyGdd"] * 0.02
+        # Moisture deficit (inches/day)
+        growing["dailyDeficit"] = (growing["etEstimate"] - growing["dailyRainfallIn"]).clip(lower=0.0)
 
         # Cumulative
         growing["cumulativeGdd"] = growing["dailyGdd"].cumsum()
         growing["cumulativeRainfallIn"] = growing["dailyRainfallIn"].cumsum()
+        growing["cumulativeDeficit"] = growing["dailyDeficit"].cumsum()
 
         daily_records = []
         for _, row in growing.iterrows():
@@ -104,6 +111,10 @@ def compute_weather_transforms(df: pd.DataFrame) -> list[dict]:
                 "t2m_avg": round(float(row["T2M"]), 2),
                 "t2m_max": round(float(row["T2M_MAX"]), 2),
                 "t2m_min": round(float(row["T2M_MIN"]), 2),
+                "heatStress": round(float(row["heatStress"]), 2),
+                "dailyDeficit": round(float(row["dailyDeficit"]), 2),
+                "cumulativeDeficit": round(float(row["cumulativeDeficit"]), 2),
+                "solarRadiation": round(float(row["ALLSKY_SFC_SW_DWN"]), 2) if "ALLSKY_SFC_SW_DWN" in growing.columns else 0.0,
             })
 
         results.append({

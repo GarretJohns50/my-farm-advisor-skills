@@ -160,4 +160,19 @@ def _field_css_template() -> str:
 }
 .combined-section h3 { margin: 0 0 0.5rem; font-size: 1.1rem; color: #444; }
 .combined-chart-container { width: 100%; height: 400px; }
+/* 3-column grid for weather panels */
+.grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    padding: 1rem;
+}
+@media (max-width: 900px) { .grid-3 { grid-template-columns: 1fr; } }
+/* Chart note annotation */
+.chart-note {
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 0.3rem;
+    font-style: italic;
+}
 """
