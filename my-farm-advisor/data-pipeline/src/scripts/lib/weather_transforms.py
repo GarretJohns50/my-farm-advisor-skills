@@ -101,6 +101,9 @@ def compute_weather_transforms(df: pd.DataFrame) -> list[dict]:
                 "cumulativeGdd": round(float(row["cumulativeGdd"]), 2),
                 "dailyRainfallIn": round(float(row["dailyRainfallIn"]), 2),
                 "cumulativeRainfallIn": round(float(row["cumulativeRainfallIn"]), 2),
+                "t2m_avg": round(float(row["T2M"]), 2),
+                "t2m_max": round(float(row["T2M_MAX"]), 2),
+                "t2m_min": round(float(row["T2M_MIN"]), 2),
             })
 
         results.append({

@@ -2,10 +2,12 @@
 
 Produces a self-contained HTML dashboard for one field, including:
 - Field boundary map with satellite basemap
+- Temperature range chart (°F, from T2M/T2M_MAX/T2M_MIN)
 - Weather charts (GDD, rainfall, cumulative)
 - NDVI time-series chart (Sentinel-prioritized, Landsat gapfill)
 - Embedded composite PNG thumbnails (peak-95, cumulative)
 - Crop history table
+- Unified year filter (affects both Temperature and NDVI charts)
 """
 
 from __future__ import annotations
@@ -20,12 +22,11 @@ import pandas as pd
 from PIL import Image
 
 from lib.basemap_fetcher import fetch_basemap
-from lib.dashboard_assets import FIELD_COLORS, build_html_body, ensure_plotly_bundle
-from lib.dashboard_assets import _css_template, _js_controls_template
-from lib.field_dashboard_assets import _field_css_template, _field_js_template
+from lib.dashboard_assets import FIELD_COLORS, ensure_plotly_bundle
+from lib.dashboard_assets import _css_template
+from lib.field_dashboard_assets import _field_css_template
 from lib.field_ndvi_transforms import compute_field_ndvi_series, get_crop_history
 from lib.paths import (
-    DATA_ROOT,
     field_weather_path,
 )
 from lib.runtime_paths import resolve_runtime_paths
@@ -115,7 +116,6 @@ def _build_field_map_data(
                     (f"Last frost: {lf}<extra></extra>" if lf else "<extra></extra>"),
             })
 
-    # Centroid label
     try:
         gdf_pts = gdf.copy()
         gdf_pts["geometry"] = gdf_pts.geometry.centroid
@@ -218,11 +218,76 @@ def _build_weather_charts_single_field(field_weather: list[dict]) -> tuple[list[
     return gdd_data, rainfall_data, cum_gdd_data, cum_rain_data
 
 
-def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
-    """Build Plotly traces for NDVI time-series.
+def _build_temp_chart_data(field_weather: list[dict]) -> list[dict]:
+    """Build temperature range area chart traces in Fahrenheit.
 
-    One trace per year, markers differentiate Sentinel vs Landsat.
+    Returns traces for each year: min baseline, max fill, avg line.
     """
+    if not field_weather:
+        return []
+
+    traces = []
+    years = sorted({d["year"] for d in field_weather})
+
+    for i, year in enumerate(years):
+        year_rec = next((r for r in field_weather if r["year"] == year), None)
+        if not year_rec:
+            continue
+        daily = year_rec["daily"]
+        if not daily:
+            continue
+
+        color = FIELD_COLORS[i % len(FIELD_COLORS)]
+        doys = [d["dayOfYear"] for d in daily]
+        tmin = [d["t2m_min"] * 9.0 / 5.0 + 32.0 for d in daily]
+        tmax = [d["t2m_max"] * 9.0 / 5.0 + 32.0 for d in daily]
+        tavg = [d["t2m_avg"] * 9.0 / 5.0 + 32.0 for d in daily]
+
+        # Bottom baseline (invisible)
+        traces.append({
+            "type": "scatter",
+            "mode": "lines",
+            "x": doys,
+            "y": tmin,
+            "line": {"width": 0},
+            "fill": "none",
+            "showlegend": False,
+            "hoverinfo": "skip",
+            "year": year,
+        })
+        # Top fill (the range)
+        traces.append({
+            "type": "scatter",
+            "mode": "lines",
+            "x": doys,
+            "y": tmax,
+            "line": {"width": 0},
+            "fill": "tonexty",
+            "fillcolor": color + "33",
+            "name": f"{year} Range",
+            "hovertemplate": f"<b>{year}</b><br>Day: %{{x}}<br>Range: %{{customdata[0]:.1f}}–%{{y:.1f}}°F<extra></extra>",
+            "customdata": [[round(t, 1)] for t in tmin],
+            "showlegend": True,
+            "year": year,
+        })
+        # Average line
+        traces.append({
+            "type": "scatter",
+            "mode": "lines",
+            "x": doys,
+            "y": tavg,
+            "line": {"color": color, "width": 2},
+            "name": f"{year} Avg",
+            "hovertemplate": f"<b>{year}</b><br>Day: %{{x}}<br>Avg: %{{y:.1f}}°F<extra></extra>",
+            "showlegend": True,
+            "year": year,
+        })
+
+    return traces
+
+
+def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
+    """Build Plotly traces for NDVI time-series."""
     if not ndvi_series:
         return []
 
@@ -239,7 +304,6 @@ def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
         clouds = [d["cloud_cover"] for d in year_data]
         dates = [d["date"] for d in year_data]
 
-        # Marker symbols: circle for sentinel, triangle-up for landsat
         symbols = ["circle" if s == "sentinel" else "triangle-up" for s in sources]
         sizes = [10 if c <= 10 else 7 for c in clouds]
 
@@ -257,10 +321,10 @@ def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
                 "line": {"width": 1, "color": "white"},
             },
             "hovertemplate": (
-                "<b>%{text}</b><br>" +
-                "Day: %{x}<br>" +
-                "NDVI: %{y:.4f}<br>" +
-                "Cloud: %{customdata}%<br>" +
+                "<b>%{text}</b><br>"
+                "Day: %{x}<br>"
+                "NDVI: %{y:.4f}<br>"
+                "Cloud: %{customdata}%<br>"
                 "Source: %{meta}<extra></extra>"
             ),
             "text": dates,
@@ -292,28 +356,9 @@ def generate_field_dashboard(
     no_basemap: bool = False,
     force_basemap: bool = False,
 ) -> Path:
-    """Generate a self-contained NDVI dashboard for a single field.
-
-    Parameters
-    ----------
-    farm_dir_path
-        Absolute path to the farm directory.
-    field_id
-        Field identifier (must exist in farm boundary GeoJSON).
-    output_path
-        Where to write the HTML. Defaults to field_dashboards_dir.
-    no_basemap
-        Skip satellite basemap.
-    force_basemap
-        Ignore tile cache and re-download.
-
-    Returns
-    -------
-    Path to the generated HTML file.
-    """
+    """Generate a self-contained NDVI dashboard for a single field."""
     farm_dir_path = farm_dir_path.resolve()
 
-    # Derive slugs from path
     parts = farm_dir_path.parts
     try:
         growers_idx = parts.index("growers")
@@ -323,26 +368,21 @@ def generate_field_dashboard(
         grower_slug = farm_dir_path.parent.parent.name
         farm_slug = farm_dir_path.name
 
-    # Load field boundary
     boundary_path = farm_dir_path / "boundary" / "field_boundaries.geojson"
     gdf = _load_field_boundary(boundary_path, field_id)
     if gdf is None:
         raise FileNotFoundError(f"Field {field_id} not found in {boundary_path}")
 
-    # Load weather
     weather_csv = field_weather_path(grower_slug, farm_slug, field_id)
     weather_df = parse_daily_weather(weather_csv)
     weather_transforms = compute_weather_transforms(weather_df)
 
-    # Load NDVI series
     runtime_paths = resolve_runtime_paths()
     runtime_base = runtime_paths.runtime_base
     field_dir = farm_dir_path / "fields" / field_id
     ndvi_series = compute_field_ndvi_series(field_dir, runtime_base)
 
-    # Load crop history
     crop_history = get_crop_history(field_dir)
-    # Augment with peak NDVI from card summary if available
     card_path = field_dir / "derived" / "summaries" / "ndvi_card_summary.json"
     if card_path.exists():
         try:
@@ -354,7 +394,6 @@ def generate_field_dashboard(
         except Exception:
             pass
 
-    # Load composite PNGs as base64
     composites = []
     features_dir = field_dir / "derived" / "features"
     for png_name, caption in [
@@ -365,23 +404,29 @@ def generate_field_dashboard(
         if b64:
             composites.append({"src": b64, "caption": caption})
 
-    # Fetch basemap
     shared_dir = runtime_paths.runtime_base / "shared"
     cache_dir = shared_dir / "dashboard_assets" / "basemaps"
     basemap_b64, mercator_extent = fetch_basemap(
         gdf, cache_dir=cache_dir, no_basemap=no_basemap, force_refresh=force_basemap
     )
 
-    # Build charts
     map_data, map_layout = _build_field_map_data(gdf, basemap_b64, mercator_extent, weather_transforms)
     gdd_data, rainfall_data, cum_gdd_data, cum_rain_data = _build_weather_charts_single_field(weather_transforms)
+    temp_data = _build_temp_chart_data(weather_transforms)
     ndvi_data = _build_ndvi_chart_data(ndvi_series)
 
-    # Chart layouts
     gdd_layout = _default_chart_layout("Daily Growing Degree Days", "GDD")
     rainfall_layout = _default_chart_layout("Daily Rainfall (inches)", "inches")
     cum_gdd_layout = _default_chart_layout("Cumulative GDD", "GDD")
     cum_rain_layout = _default_chart_layout("Cumulative Rainfall", "inches")
+    temp_layout = {
+        "title": {"text": "Daily Temperature Range (°F)", "font": {"size": 12}},
+        "xaxis": {"title": "Day of year"},
+        "yaxis": {"title": "Temperature (°F)"},
+        "margin": {"l": 50, "r": 20, "t": 40, "b": 40},
+        "hovermode": "closest",
+        "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
+    }
     ndvi_layout = {
         "title": {"text": "NDVI Time Series (Sentinel + Landsat)", "font": {"size": 12}},
         "xaxis": {"title": "Day of year"},
@@ -391,10 +436,8 @@ def generate_field_dashboard(
         "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
     }
 
-    # Ensure Plotly bundle
     plotly_bundle = ensure_plotly_bundle(shared_dir)
 
-    # Title and subtitle
     area_str = ""
     if "area_acres" in gdf.columns:
         area_str = f"{gdf.iloc[0].get('area_acres', 'N/A')} ac"
@@ -404,8 +447,8 @@ def generate_field_dashboard(
     title = f"Field {field_id} — NDVI Dashboard"
     subtitle = f"{area_str}{crop_str} | {len(weather_transforms)} years weather | {len(ndvi_series)} clear-sky scenes"
 
-    # Build HTML body
-    # We need to extend the base HTML with NDVI-specific sections
+    years = sorted({d["year"] for d in weather_transforms})
+
     html = _build_field_html_body(
         plotly_bundle=plotly_bundle,
         title=title,
@@ -420,14 +463,15 @@ def generate_field_dashboard(
         cumulative_gdd_data=cum_gdd_data,
         cumulative_rainfall_layout=cum_rain_layout,
         cumulative_rainfall_data=cum_rain_data,
+        temp_layout=temp_layout,
+        temp_data=temp_data,
         ndvi_layout=ndvi_layout,
         ndvi_data=ndvi_data,
         composites=composites,
         crop_history=crop_history,
-        years=sorted({d["year"] for d in weather_transforms}),
+        years=years,
     )
 
-    # Determine output path
     if output_path is None:
         dashboards_dir = field_dir / "derived" / "dashboards"
         dashboards_dir.mkdir(parents=True, exist_ok=True)
@@ -453,6 +497,8 @@ def _build_field_html_body(
     cumulative_gdd_data: list[dict],
     cumulative_rainfall_layout: dict,
     cumulative_rainfall_data: list[dict],
+    temp_layout: dict,
+    temp_data: list[dict],
     ndvi_layout: dict,
     ndvi_data: list[dict],
     composites: list[dict],
@@ -462,12 +508,11 @@ def _build_field_html_body(
     """Assemble the self-contained HTML for a single-field dashboard."""
     import json
 
-    year_buttons = " ".join(
-        f'<button class="btn" onclick="toggleVisibility(\'ndvi-chart\', [{y}])">{y}</button>'
+    year_buttons = "\n".join(
+        f'<button class="year-btn active" data-year="{y}" onclick="toggleYear(\'{y}\')">{y}</button>'
         for y in years
     )
 
-    # Composite gallery HTML
     composite_html = ""
     if composites:
         items = "\n".join(
@@ -476,7 +521,6 @@ def _build_field_html_body(
         )
         composite_html = f'<div class="composite-gallery">{items}</div>'
 
-    # Crop table HTML
     crop_table_html = ""
     if crop_history:
         rows = "\n".join(
@@ -502,6 +546,8 @@ def _build_field_html_body(
     cum_gdd_data_json = json.dumps(cumulative_gdd_data, default=str)
     cum_rain_layout_json = json.dumps(cumulative_rainfall_layout, default=str)
     cum_rain_data_json = json.dumps(cumulative_rainfall_data, default=str)
+    temp_layout_json = json.dumps(temp_layout, default=str)
+    temp_data_json = json.dumps(temp_data, default=str)
     ndvi_layout_json = json.dumps(ndvi_layout, default=str)
     ndvi_data_json = json.dumps(ndvi_data, default=str)
 
@@ -523,14 +569,21 @@ def _build_field_html_body(
     </div>
 </div>
 <div class="controls-bar">
-    <span>NDVI Years:</span>
-    {year_buttons}
-    <button class="btn" onclick="resetYears('ndvi-chart')">All Years</button>
+    <span>Year Filter (Temp + NDVI):</span>
+    <div class="year-filter-bar">
+        {year_buttons}
+        <button class="year-btn global" onclick="setAllYears(true)">All Years</button>
+        <button class="year-btn global" onclick="setAllYears(false)">None</button>
+    </div>
     <span class="legend-inline"><span class="legend-symbol">&#9679;</span> Sentinel <span class="legend-symbol">&#9650;</span> Landsat</span>
 </div>
 <div class="map-section">
     <h3>Field Boundary</h3>
     <div id="map-container"></div>
+</div>
+<div class="temp-section">
+    <h3>Daily Temperature Range (°F)</h3>
+    <div id="temp-chart" class="temp-chart-container"></div>
 </div>
 <div class="grid">
     <div class="chart-card">
@@ -557,8 +610,47 @@ def _build_field_html_body(
 </div>
 {crop_table_html}
 <script>
-{_js_controls_template()}
-{_field_js_template()}
+// Unified year filtering
+var activeYears = [{', '.join(str(y) for y in years)}];
+
+function toggleYear(year) {{
+    var btn = document.querySelector('.year-btn[data-year="' + year + '"]');
+    var idx = activeYears.indexOf(parseInt(year));
+    if (idx >= 0) {{
+        activeYears.splice(idx, 1);
+        if (btn) btn.classList.remove('active');
+    }} else {{
+        activeYears.push(parseInt(year));
+        if (btn) btn.classList.add('active');
+    }}
+    updateAllCharts();
+}}
+
+function setAllYears(active) {{
+    activeYears = active ? [{', '.join(str(y) for y in years)}] : [];
+    document.querySelectorAll('.year-btn[data-year]').forEach(function(btn) {{
+        if (active) btn.classList.add('active');
+        else btn.classList.remove('active');
+    }});
+    updateAllCharts();
+}}
+
+function updateChartVisibility(chartId, years) {{
+    var gd = document.getElementById(chartId);
+    if (!gd || !gd.data) return;
+    var visible = [];
+    for (var i = 0; i < gd.data.length; i++) {{
+        var d = gd.data[i];
+        var show = years.indexOf(d.year) >= 0;
+        visible.push(show ? true : 'legendonly');
+    }}
+    Plotly.restyle(gd, {{visible: visible}});
+}}
+
+function updateAllCharts() {{
+    updateChartVisibility('temp-chart', activeYears);
+    updateChartVisibility('ndvi-chart', activeYears);
+}}
 
 var mapLayout = {map_layout_json};
 var mapData = {map_data_json};
@@ -579,6 +671,10 @@ Plotly.newPlot('cumulative-gdd-chart', cgData, cgLayout, {{responsive: true}});
 var crLayout = {cum_rain_layout_json};
 var crData = {cum_rain_data_json};
 Plotly.newPlot('cumulative-rainfall-chart', crData, crLayout, {{responsive: true}});
+
+var tempLayout = {temp_layout_json};
+var tempData = {temp_data_json};
+Plotly.newPlot('temp-chart', tempData, tempLayout, {{responsive: true}});
 
 var ndviLayout = {ndvi_layout_json};
 var ndviData = {ndvi_data_json};
