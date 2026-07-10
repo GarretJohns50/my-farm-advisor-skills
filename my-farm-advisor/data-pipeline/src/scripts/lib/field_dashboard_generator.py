@@ -1366,6 +1366,12 @@ def _build_field_html_body(
         event_chips.append(
             f'<span class="event-chip {sev}">{event_type_icons.get(etype, "")} {count} {event_type_labels.get(etype, etype)}</span>'
         )
+    from datetime import datetime
+
+    def _fmt_date(iso: str) -> str:
+        """Format ISO date as 'Mon D' (e.g., 'Jun 1')."""
+        return datetime.strptime(iso, "%Y-%m-%d").strftime("%b %-d")
+
     events_summary_html = ""
     events_grid_html = ""
     if events_2025:
@@ -1373,7 +1379,9 @@ def _build_field_html_body(
         cards = []
         for e in events_2025:
             sev = e.get("severity", "mild")
-            date_range = e["start_date"] if e["start_date"] == e["end_date"] else f"{e['start_date']} – {e['end_date']}"
+            start_fmt = _fmt_date(e["start_date"])
+            end_fmt = _fmt_date(e["end_date"])
+            date_range = start_fmt if e["start_date"] == e["end_date"] else f"{start_fmt} – {end_fmt}"
             cards.append(
                 f'<div class="event-card {sev}" onclick="toggleEventDetail(this)">'
                 f'<div class="event-header">'
