@@ -1158,8 +1158,9 @@ def generate_field_dashboard(
 
     shared_dir = runtime_paths.runtime_base / "shared"
     cache_dir = shared_dir / "dashboard_assets" / "basemaps"
+    # Always embed satellite basemap for field dashboard map
     basemap_b64, mercator_extent = fetch_basemap(
-        gdf, cache_dir=cache_dir, no_basemap=no_basemap, force_refresh=force_basemap
+        gdf, cache_dir=cache_dir, no_basemap=False, force_refresh=force_basemap
     )
 
     map_data, map_layout = _build_field_map_data(gdf, basemap_b64, mercator_extent, weather_transforms)
