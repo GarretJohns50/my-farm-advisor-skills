@@ -437,9 +437,9 @@ def _build_solar_chart_data(field_weather: list[dict]) -> list[dict]:
     return traces
 
 
-def _build_solar_layout() -> dict:
-    """Build solar chart layout with low-radiation threshold line."""
-    return {
+def _build_solar_layout(stage_medians: list[dict]) -> dict:
+    """Build solar chart layout with low-radiation threshold line and R-stage markers."""
+    layout = {
         "title": {"text": "Solar Radiation", "font": {"size": 12}},
         "xaxis": {"title": "Day of year", "range": [60, 305]},
         "yaxis": {"title": "MJ/m²/day"},
@@ -462,10 +462,35 @@ def _build_solar_layout() -> dict:
             "xanchor": "right",
             "yanchor": "bottom",
         }],
-        "margin": {"l": 50, "r": 20, "t": 40, "b": 40},
+        "margin": {"l": 50, "r": 20, "t": 40, "b": 55},
         "hovermode": "closest",
         "legend": {"x": 0, "y": 1, "bgcolor": "rgba(255,255,255,0.7)", "font": {"size": 9}},
     }
+    # Add R-stage vertical lines (no V stages)
+    for stage in stage_medians:
+        if not stage["stage"].startswith("R"):
+            continue
+        layout["shapes"].append({
+            "type": "line",
+            "x0": stage["median_doy"],
+            "x1": stage["median_doy"],
+            "y0": 0,
+            "y1": 1,
+            "yref": "paper",
+            "line": {"color": stage["color"], "width": 1.5, "dash": "dot"},
+        })
+        layout["annotations"].append({
+            "x": stage["median_doy"],
+            "y": -0.12,
+            "yref": "paper",
+            "text": f"{stage['stage']} — {stage['name']}",
+            "showarrow": False,
+            "font": {"size": 8, "color": stage["color"]},
+            "bgcolor": "rgba(255,255,255,0.8)",
+            "borderpad": 2,
+            "align": "center",
+        })
+    return layout
 
 
 def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
@@ -778,7 +803,7 @@ def generate_field_dashboard(
     cum_gdd_layout = _build_cum_gdd_layout_with_stages(stage_medians)
     cum_rain_layout = _default_chart_layout("Cumulative Rainfall", "inches", x_range=(60, 305))
     heat_layout = _default_chart_layout("Heat Stress", "°F above 86°F", x_range=(60, 305))
-    solar_layout = _build_solar_layout()
+    solar_layout = _build_solar_layout(stage_medians)
     temp_layout = {
         "title": {"text": "Daily Temperature Range (°F)", "font": {"size": 12}},
         "xaxis": {"title": "Day of year", "range": [60, 305]},
