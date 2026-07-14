@@ -269,3 +269,44 @@ cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
 - **Embedded composite images** — corn peak-95 NDVI map, cumulative season NDVI (base64 PNGs)
 - **Crop history table** — year, crop, scene count, peak NDVI
 - **Colorblind-safe** — years differentiated by color, satellites by marker shape
+
+## Assignment 3: Yearly Grower Dashboard
+
+A single-field agronomic dashboard that aligns NDVI, precipitation, temperature, and cumulative GDD on a shared time axis for the most recent year.
+
+### Inputs
+
+- `growers/<grower>/farms/<farm>/fields/<field>/weather/daily_weather.csv` — NASA POWER daily weather (2021–2025)
+- `growers/<grower>/farms/<farm>/fields/<field>/satellite/sentinel/manifest.json` — Sentinel-2 scene inventory
+- `growers/<grower>/farms/<farm>/boundary/field_boundaries.geojson` — field polygon
+
+### Weather metrics
+
+- Growing Degree Days (GDD): `max((T2M_MAX + T2M_MIN)/2 - 10°C, 0)`, cumulative from last frost
+- Heat stress: degrees above 86°F
+- Last frost: latest pre-July 1 day with T2M_MIN ≤ 0°C
+- Rainfall, solar radiation, wind speed (mph from WS10M)
+
+### Generated outputs
+
+- Interactive HTML: `fields/<field-id>/derived/dashboards/<field-id>_dashboard.html`
+- Multi-panel PNG (2025-only): `fields/<field-id>/derived/dashboards/<field-id>_multi_panel_2025.png`
+
+### Rerun the workflow
+
+```bash
+export DATA_PIPELINE_DATA_ROOT=/absolute/path/to/my-farm-advisor-runtime
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/field_dashboard_cli.py field-dashboard generate \
+  --grower-slug central-ne-grower \
+  --farm-slug central-ne-grower-nebraska \
+  --field-id osm-554305501
+```
+
+### Known limitations
+
+- NDVI cloud masking requires Sentinel-2 SCL band; scenes without SCL fall back to metadata cloud cover only
+- Temporal anomaly detection needs ≥4 clear-sky scenes per year
+- Cool-period detection needs a pre-computed DOY temperature baseline (auto-generated from county parquet on first run)
+- Growth stages are corn-specific; soybean stages available via `crop` parameter in `detect_critical_events()`
