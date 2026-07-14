@@ -884,7 +884,7 @@ def generate_field_dashboard(
     events = detect_critical_events(
         field_weather=weather_transforms,
         ndvi_series=ndvi_series,
-        target_year=max(years),
+        target_year=max(d["year"] for d in weather_transforms),
         stage_medians=stage_medians,
         baseline_path=baseline_path,
     )
