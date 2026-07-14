@@ -19,7 +19,7 @@ _SCL_MASK = {3, 7, 8, 9, 10}
 _MIN_CLEAR_FRACTION = 0.75
 
 
-def _read_tif_band(tif_path: Path) -> np.ndarray | None:
+def read_tif_band(tif_path: Path) -> np.ndarray | None:
     """Read a single-band GeoTIFF as numpy array."""
     if not tif_path.exists():
         return None
@@ -34,6 +34,7 @@ def _read_tif_band(tif_path: Path) -> np.ndarray | None:
 def compute_cloud_masked_ndvi(
     ndvi_tif: Path,
     scl_tif: Path,
+    min_clear_fraction: float = _MIN_CLEAR_FRACTION,
 ) -> tuple[float | None, float]:
     """Compute cloud-masked NDVI mean using Sentinel-2 SCL band.
 
@@ -43,22 +44,40 @@ def compute_cloud_masked_ndvi(
         Path to single-band NDVI GeoTIFF.
     scl_tif : Path
         Path to single-band SCL (Scene Classification Layer) GeoTIFF.
+    min_clear_fraction : float
+        Minimum fraction of clear pixels required to keep scene (default 0.75).
 
     Returns
     -------
     tuple[float | None, float]
-        (clear_mean_ndvi, clear_fraction). If clear_fraction < _MIN_CLEAR_FRACTION,
+        (clear_mean_ndvi, clear_fraction). If clear_fraction < min_clear_fraction,
         clear_mean_ndvi is None (scene should be rejected).
     """
-    ndvi_arr = _read_tif_band(ndvi_tif)
-    scl_arr = _read_tif_band(scl_tif)
+    ndvi_arr = read_tif_band(ndvi_tif)
+    scl_arr = read_tif_band(scl_tif)
 
     if ndvi_arr is None or scl_arr is None:
         return None, 0.0
 
+    # Handle resolution mismatch: SCL may be coarser than NDVI
     if ndvi_arr.shape != scl_arr.shape:
-        # Shape mismatch — cannot mask pixel-by-pixel
-        return None, 0.0
+        try:
+            scl_img = Image.open(scl_tif)
+            scl_resized = scl_img.resize((ndvi_arr.shape[1], ndvi_arr.shape[0]), Image.NEAREST)
+            scl_arr = np.array(scl_resized)
+        except Exception:
+            # Cannot resize — fall back to metadata-only (no pixel masking)
+            # Still compute raw NDVI mean but report low clear_fraction
+            if ndvi_arr.dtype.kind in {"i", "u"}:
+                ndvi_valid = (ndvi_arr > 0) & (ndvi_arr < 10000)
+            else:
+                ndvi_valid = np.isfinite(ndvi_arr) & (ndvi_arr > -1.0) & (ndvi_arr < 1.0)
+            clear_count = int(np.count_nonzero(ndvi_valid))
+            total_count = int(ndvi_arr.size)
+            clear_fraction = clear_count / total_count if total_count > 0 else 0.0
+            if clear_fraction < _MIN_CLEAR_FRACTION:
+                return None, clear_fraction
+            return float(ndvi_arr[ndvi_valid].mean()), clear_fraction
 
     # Build valid pixel mask from SCL
     valid_mask = np.isin(scl_arr, list(_SCL_VALID))
@@ -74,7 +93,7 @@ def compute_cloud_masked_ndvi(
     total_count = int(ndvi_arr.size)
     clear_fraction = clear_count / total_count if total_count > 0 else 0.0
 
-    if clear_fraction < _MIN_CLEAR_FRACTION:
+    if clear_fraction < min_clear_fraction:
         return None, clear_fraction
 
     clear_mean = float(ndvi_arr[combined_mask].mean())

@@ -30,18 +30,12 @@ from lib.paths import (
     field_weather_path,
 )
 from lib.runtime_paths import resolve_runtime_paths
+from lib.agronomic_events import detect_critical_events, CROP_GROWTH_STAGES
 from lib.doy_baseline import ensure_doy_temperature_baseline
 from lib.weather_transforms import compute_weather_transforms, parse_daily_weather
 
-# Corn growth stage GDD thresholds (base 10°C)
-CORN_GROWTH_STAGES: list[dict] = [
-    {"stage": "VE", "name": "Emergence", "gdd": 125, "color": "#2ca02c"},
-    {"stage": "V6", "name": "6-Leaf", "gdd": 575, "color": "#2ca02c"},
-    {"stage": "VT", "name": "Tasseling", "gdd": 1150, "color": "#ff7f0e"},
-    {"stage": "R1", "name": "Silking", "gdd": 1250, "color": "#d62728"},
-    {"stage": "R3", "name": "Milk", "gdd": 1925, "color": "#9467bd"},
-    {"stage": "R6", "name": "Physiological Maturity", "gdd": 2700, "color": "#7f7f7f"},
-]
+# Default to corn stages; can be overridden per crop
+CORN_GROWTH_STAGES: list[dict] = CROP_GROWTH_STAGES["corn"]
 
 
 def _load_field_boundary(farm_boundary_path: Path, field_id: str) -> gpd.GeoDataFrame | None:
@@ -177,7 +171,7 @@ def _build_field_map_data(
     return map_data, layout
 
 
-def _build_weather_charts_single_field(field_weather: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+def build_weather_charts(field_weather: list[dict]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
     """Build chart data for a single field's weather (one trace per year)."""
     color = FIELD_COLORS[0]
     gdd_data: list[dict] = []
@@ -229,7 +223,7 @@ def _build_weather_charts_single_field(field_weather: list[dict]) -> tuple[list[
     return gdd_data, rainfall_data, cum_gdd_data, cum_rain_data
 
 
-def _build_temp_chart_data(field_weather: list[dict]) -> list[dict]:
+def build_temperature_chart(field_weather: list[dict]) -> list[dict]:
     """Build temperature range area chart traces in Fahrenheit.
 
     Returns traces for each year: min baseline, max fill, avg line.
@@ -297,7 +291,7 @@ def _build_temp_chart_data(field_weather: list[dict]) -> list[dict]:
     return traces
 
 
-def _build_heat_stress_chart_data(field_weather: list[dict]) -> list[dict]:
+def build_heat_stress_chart(field_weather: list[dict]) -> list[dict]:
     """Build heat stress bar chart data (degrees above 86°F)."""
     if not field_weather:
         return []
@@ -322,7 +316,7 @@ def _build_heat_stress_chart_data(field_weather: list[dict]) -> list[dict]:
     return traces
 
 
-def _build_rainfall_anomaly_chart_data(field_weather: list[dict]) -> tuple[list[dict], dict]:
+def build_rainfall_anomaly_chart(field_weather: list[dict]) -> tuple[list[dict], dict]:
     """Build monthly rainfall anomaly bar chart (Mar–Oct).
 
     For each month, computes the 5-year average monthly rainfall, then
@@ -412,7 +406,7 @@ def _build_rainfall_anomaly_chart_data(field_weather: list[dict]) -> tuple[list[
     return traces, layout
 
 
-def _build_solar_chart_data(field_weather: list[dict]) -> list[dict]:
+def build_solar_chart(field_weather: list[dict]) -> list[dict]:
     """Build solar radiation line chart data."""
     if not field_weather:
         return []
@@ -438,7 +432,7 @@ def _build_solar_chart_data(field_weather: list[dict]) -> list[dict]:
     return traces
 
 
-def _build_wind_chart_data(field_weather: list[dict]) -> list[dict]:
+def build_wind_chart(field_weather: list[dict]) -> list[dict]:
     """Build wind speed line chart data (mph, from WS10M)."""
     if not field_weather:
         return []
@@ -551,322 +545,7 @@ def _build_wind_layout() -> dict:
     }
 
 
-def _detect_2025_events(
-    field_weather: list[dict],
-    ndvi_series: list[dict],
-    stage_medians: list[dict],
-    baseline_path: Path | None,
-) -> list[dict]:
-    """Detect critical agronomic events for year 2025 against 5-year baselines.
-
-    Returns a list of event dicts with severity, chart target, and agronomic
-    context for rendering in the dashboard summary panel and chart annotations.
-    """
-    events: list[dict] = []
-
-    # Locate 2025 data
-    weather_2025 = next((r for r in field_weather if r["year"] == 2025), None)
-    if weather_2025 is None:
-        return events
-
-    daily_2025 = weather_2025.get("daily", [])
-    if not daily_2025:
-        return events
-
-    # Load DOY baseline for cool-period detection
-    baseline: dict[int, dict[str, float]] = {}
-    if baseline_path and baseline_path.exists():
-        try:
-            raw = json.loads(baseline_path.read_text(encoding="utf-8"))
-            baseline = {int(k): v for k, v in raw.get("doy_stats", {}).items()}
-        except Exception:
-            pass
-
-    # Build 5-year averages for rainfall context
-    monthly_totals: dict[int, dict[int, float]] = {}
-    for r in field_weather:
-        yr = r["year"]
-        daily = r.get("daily", [])
-        monthly_totals[yr] = {}
-        for month in range(3, 11):
-            month_days = [d for d in daily if int(d["date"].split("-")[1]) == month]
-            monthly_totals[yr][month] = sum(d.get("dailyRainfallIn", 0.0) for d in month_days)
-    month_avg: dict[int, float] = {}
-    for month in range(3, 11):
-        totals = [monthly_totals[yr][month] for yr in monthly_totals]
-        month_avg[month] = sum(totals) / len(totals) if totals else 0.0
-
-    # R-stage DOY window
-    r_stages = [s for s in stage_medians if s["stage"].startswith("R")]
-    r1_doy = next((s["median_doy"] for s in r_stages if s["stage"] == "R1"), None)
-    r6_doy = next((s["median_doy"] for s in r_stages if s["stage"] == "R6"), None)
-
-    # Helper: severity from thresholds
-    def _sev(value: float, mild: float, moderate: float) -> str:
-        if value >= moderate:
-            return "severe"
-        if value >= mild:
-            return "moderate"
-        return "mild"
-
-    # 1. Heavy rain events (>1.0 in/day)
-    for d in daily_2025:
-        rain = d.get("dailyRainfallIn", 0.0)
-        if rain > 1.0:
-            month = int(d["date"].split("-")[1])
-            avg = month_avg.get(month, 0.0)
-            ratio = round(rain / avg, 1) if avg > 0 else 0.0
-            sev = _sev(rain, 1.5, 2.5)
-            events.append({
-                "type": "heavy_rain",
-                "display_name": "Heavy Rain",
-                "year": 2025,
-                "start_doy": d["dayOfYear"],
-                "end_doy": d["dayOfYear"],
-                "start_date": d["date"],
-                "end_date": d["date"],
-                "value": round(rain, 2),
-                "unit": "in",
-                "severity": sev,
-                "chart_target": "rainfall",
-                "description": f"{rain:.1f} in rainfall on DOY {d['dayOfYear']}",
-                "agronomic_note": f"{ratio:.1f}× above 5-year {['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month]} average. May cause nitrogen leaching or saturated soils.",
-                "baseline_context": {"month_avg": round(avg, 2), "ratio": ratio},
-            })
-
-    # 2. Heat wave events (3+ consecutive days max temp >86°F)
-    tmax_f = [(d["dayOfYear"], d["date"], d.get("t2m_max", 0.0) * 9.0 / 5.0 + 32.0) for d in daily_2025]
-    streak = 0
-    streak_start = 0
-    for i, (doy, date, temp_f) in enumerate(tmax_f):
-        if temp_f > 86.0:
-            if streak == 0:
-                streak_start = i
-            streak += 1
-        else:
-            if streak >= 3:
-                start = tmax_f[streak_start]
-                end = tmax_f[i - 1]
-                max_temp = max(tmax_f[j][2] for j in range(streak_start, i))
-                sev = _sev(streak, 5, 7)
-                events.append({
-                    "type": "heat_wave",
-                    "display_name": "Heat Wave",
-                    "year": 2025,
-                    "start_doy": start[0],
-                    "end_doy": end[0],
-                    "start_date": start[1],
-                    "end_date": end[1],
-                    "value": streak,
-                    "unit": "days",
-                    "severity": sev,
-                    "chart_target": "temp",
-                    "description": f"{streak} consecutive days >86°F (DOY {start[0]}–{end[0]})",
-                    "agronomic_note": f"Peak {max_temp:.1f}°F. Heat stress during pollination can reduce kernel set.",
-                    "baseline_context": {},
-                })
-            streak = 0
-    if streak >= 3:
-        start = tmax_f[streak_start]
-        end = tmax_f[-1]
-        max_temp = max(tmax_f[j][2] for j in range(streak_start, len(tmax_f)))
-        sev = _sev(streak, 5, 7)
-        events.append({
-            "type": "heat_wave",
-            "display_name": "Heat Wave",
-            "year": 2025,
-            "start_doy": start[0],
-            "end_doy": end[0],
-            "start_date": start[1],
-            "end_date": end[1],
-            "value": streak,
-            "unit": "days",
-            "severity": sev,
-            "chart_target": "temp",
-            "description": f"{streak} consecutive days >86°F (DOY {start[0]}–{end[0]})",
-            "agronomic_note": f"Peak {max_temp:.1f}°F. Heat stress during pollination can reduce kernel set.",
-            "baseline_context": {},
-        })
-
-    # 3. Cool period events (3+ consecutive days avg temp >10°F below DOY baseline)
-    if baseline:
-        tavg_f = [(d["dayOfYear"], d["date"], d.get("t2m_avg", 0.0) * 9.0 / 5.0 + 32.0) for d in daily_2025]
-        streak = 0
-        streak_start = 0
-        for i, (doy, date, temp_f) in enumerate(tavg_f):
-            doy_stats = baseline.get(doy, {})
-            base_t = doy_stats.get("mean_t2m", 0.0) * 9.0 / 5.0 + 32.0
-            deficit = base_t - temp_f
-            if deficit > 10.0:
-                if streak == 0:
-                    streak_start = i
-                streak += 1
-            else:
-                if streak >= 3:
-                    start = tavg_f[streak_start]
-                    end = tavg_f[i - 1]
-                    max_deficit = max(base_t - tavg_f[j][2] for j in range(streak_start, i))
-                    sev = _sev(max_deficit, 15, 20)
-                    events.append({
-                        "type": "cool_period",
-                        "display_name": "Cool Period",
-                        "year": 2025,
-                        "start_doy": start[0],
-                        "end_doy": end[0],
-                        "start_date": start[1],
-                        "end_date": end[1],
-                        "value": round(max_deficit, 1),
-                        "unit": "°F below normal",
-                        "severity": sev,
-                        "chart_target": "temp",
-                        "description": f"{streak} days >10°F below normal (DOY {start[0]}–{end[0]})",
-                        "agronomic_note": f"Max deficit {max_deficit:.1f}°F below 5-year DOY average. Cool, cloudy weather slows GDD accumulation.",
-                        "baseline_context": {},
-                    })
-                streak = 0
-        if streak >= 3:
-            start = tavg_f[streak_start]
-            end = tavg_f[-1]
-            max_deficit = max(base_t - tavg_f[j][2] for j in range(streak_start, len(tavg_f)))
-            sev = _sev(max_deficit, 15, 20)
-            events.append({
-                "type": "cool_period",
-                "display_name": "Cool Period",
-                "year": 2025,
-                "start_doy": start[0],
-                "end_doy": end[0],
-                "start_date": start[1],
-                "end_date": end[1],
-                "value": round(max_deficit, 1),
-                "unit": "°F below normal",
-                "severity": sev,
-                "chart_target": "temp",
-                "description": f"{streak} days >10°F below normal (DOY {start[0]}–{end[0]})",
-                "agronomic_note": f"Max deficit {max_deficit:.1f}°F below 5-year DOY average. Cool, cloudy weather slows GDD accumulation.",
-                "baseline_context": {},
-            })
-
-    # 4. NDVI dip events (>0.10 drop between consecutive scenes)
-    ndvi_2025 = [d for d in ndvi_series if d["year"] == 2025]
-    ndvi_2025.sort(key=lambda x: x["doy"])
-    for i in range(1, len(ndvi_2025)):
-        prev = ndvi_2025[i - 1]
-        curr = ndvi_2025[i]
-        drop = prev["mean_ndvi"] - curr["mean_ndvi"]
-        if drop > 0.10:
-            sev = _sev(drop, 0.15, 0.25)
-            events.append({
-                "type": "ndvi_dip",
-                "display_name": "NDVI Dip",
-                "year": 2025,
-                "start_doy": curr["doy"],
-                "end_doy": curr["doy"],
-                "start_date": curr["date"],
-                "end_date": curr["date"],
-                "value": round(drop, 3),
-                "unit": "NDVI",
-                "severity": sev,
-                "chart_target": "combined",
-                "description": f"NDVI dropped {drop:.3f} from {prev['mean_ndvi']:.3f} to {curr['mean_ndvi']:.3f} (DOY {curr['doy']})",
-                "agronomic_note": "Sharp NDVI decline may indicate drought stress, disease, hail damage, or end-of-season senescence.",
-                "baseline_context": {},
-            })
-
-    # 5. NDVI surge events (>0.15 increase between consecutive scenes)
-    for i in range(1, len(ndvi_2025)):
-        prev = ndvi_2025[i - 1]
-        curr = ndvi_2025[i]
-        rise = curr["mean_ndvi"] - prev["mean_ndvi"]
-        if rise > 0.15:
-            sev = _sev(rise, 0.20, 0.30)
-            events.append({
-                "type": "ndvi_surge",
-                "display_name": "NDVI Surge",
-                "year": 2025,
-                "start_doy": curr["doy"],
-                "end_doy": curr["doy"],
-                "start_date": curr["date"],
-                "end_date": curr["date"],
-                "value": round(rise, 3),
-                "unit": "NDVI",
-                "severity": sev,
-                "chart_target": "combined",
-                "description": f"NDVI surged {rise:.3f} from {prev['mean_ndvi']:.3f} to {curr['mean_ndvi']:.3f} (DOY {curr['doy']})",
-                "agronomic_note": "Rapid NDVI increase indicates rapid canopy development, often following rain after dry conditions.",
-                "baseline_context": {},
-            })
-
-    # 6. Low solar events during R-stages (<18 MJ/m²)
-    if r1_doy and r6_doy:
-        for d in daily_2025:
-            doy = d["dayOfYear"]
-            if r1_doy <= doy <= r6_doy:
-                solar = d.get("solarRadiation", 0.0)
-                if solar < 18.0:
-                    sev = _sev(18.0 - solar, 3, 6)
-                    events.append({
-                        "type": "low_solar",
-                        "display_name": "Low Solar",
-                        "year": 2025,
-                        "start_doy": doy,
-                        "end_doy": doy,
-                        "start_date": d["date"],
-                        "end_date": d["date"],
-                        "value": round(solar, 1),
-                        "unit": "MJ/m²",
-                        "severity": sev,
-                        "chart_target": "solar",
-                        "description": f"{solar:.1f} MJ/m² on DOY {doy} during {stage_medians[0].get('crop', 'corn')} R-stages",
-                        "agronomic_note": "Low solar radiation during grain-fill reduces photosynthesis and can lower yield potential.",
-                        "baseline_context": {},
-                    })
-
-    # 7. High wind events during R-stages (>30 mph)
-    if r1_doy and r6_doy:
-        for d in daily_2025:
-            doy = d["dayOfYear"]
-            if r1_doy <= doy <= r6_doy:
-                wind = d.get("windSpeedMph", 0.0)
-                if wind > 30.0:
-                    sev = _sev(wind, 35, 40)
-                    events.append({
-                        "type": "high_wind",
-                        "display_name": "High Wind",
-                        "year": 2025,
-                        "start_doy": doy,
-                        "end_doy": doy,
-                        "start_date": d["date"],
-                        "end_date": d["date"],
-                        "value": round(wind, 1),
-                        "unit": "mph",
-                        "severity": sev,
-                        "chart_target": "wind",
-                        "description": f"{wind:.1f} mph wind on DOY {doy} during R-stages",
-                        "agronomic_note": "Strong winds during reproductive stages can cause root lodging, greensnap, or silk desiccation.",
-                        "baseline_context": {},
-                    })
-
-    # Deduplicate: merge same-type events within 3 DOY
-    events.sort(key=lambda e: (e["type"], e["start_doy"]))
-    deduped: list[dict] = []
-    for e in events:
-        if deduped and e["type"] == deduped[-1]["type"] and e["start_doy"] - deduped[-1]["end_doy"] <= 3:
-            # merge
-            prev = deduped[-1]
-            prev["end_doy"] = e["end_doy"]
-            prev["end_date"] = e["end_date"]
-            if e["value"] > prev["value"]:
-                prev["value"] = e["value"]
-                prev["severity"] = e["severity"]
-                prev["description"] = e["description"]
-            prev["description"] = f"{prev['type']} events DOY {prev['start_doy']}–{prev['end_doy']}"
-        else:
-            deduped.append(e)
-
-    return deduped
-
-
-def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
+def build_ndvi_chart(ndvi_series: list[dict]) -> list[dict]:
     """Build Plotly traces for NDVI time-series. Filters masked scenes."""
     if not ndvi_series:
         return []
@@ -954,7 +633,7 @@ def _add_stage_lines_to_layout(layout: dict, stage_medians: list[dict]) -> dict:
     return layout
 
 
-def _build_combined_ndvi_gdd_chart_data(
+def build_combined_chart(
     ndvi_series: list[dict], field_weather: list[dict], stage_medians: list[dict]
 ) -> tuple[list[dict], dict]:
     """Build combined NDVI + Cumulative GDD dual-axis chart data.
@@ -1183,14 +862,14 @@ def generate_field_dashboard(
     )
 
     map_data, map_layout = _build_field_map_data(gdf, basemap_b64, mercator_extent, weather_transforms)
-    gdd_data, rainfall_data, cum_gdd_data, cum_rain_data = _build_weather_charts_single_field(weather_transforms)
-    temp_data = _build_temp_chart_data(weather_transforms)
+    gdd_data, rainfall_data, cum_gdd_data, cum_rain_data = build_weather_charts(weather_transforms)
+    temp_data = build_temperature_chart(weather_transforms)
     stage_medians = _compute_stage_median_doys(weather_transforms)
-    combined_data, combined_layout = _build_combined_ndvi_gdd_chart_data(ndvi_series, weather_transforms, stage_medians)
-    heat_data = _build_heat_stress_chart_data(weather_transforms)
-    anomaly_data, anomaly_layout = _build_rainfall_anomaly_chart_data(weather_transforms)
-    solar_data = _build_solar_chart_data(weather_transforms)
-    wind_data = _build_wind_chart_data(weather_transforms)
+    combined_data, combined_layout = build_combined_chart(ndvi_series, weather_transforms, stage_medians)
+    heat_data = build_heat_stress_chart(weather_transforms)
+    anomaly_data, anomaly_layout = build_rainfall_anomaly_chart(weather_transforms)
+    solar_data = build_solar_chart(weather_transforms)
+    wind_data = build_wind_chart(weather_transforms)
 
     # Ensure DOY temperature baseline for cool-period detection
     fips_code = ""
@@ -1202,7 +881,13 @@ def generate_field_dashboard(
     if fips_code and len(fips_code) == 5:
         baseline_path = ensure_doy_temperature_baseline(fips_code, shared_dir)
 
-    events = _detect_2025_events(weather_transforms, ndvi_series, stage_medians, baseline_path)
+    events = detect_critical_events(
+        field_weather=weather_transforms,
+        ndvi_series=ndvi_series,
+        target_year=max(years),
+        stage_medians=stage_medians,
+        baseline_path=baseline_path,
+    )
 
     gdd_layout = _default_chart_layout("Daily Growing Degree Days", "GDD", x_range=(60, 305))
     rainfall_layout = _default_chart_layout("Daily Rainfall (inches)", "inches", x_range=(60, 305))
