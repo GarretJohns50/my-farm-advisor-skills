@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from lib.ndvi_quality import compute_cloud_masked_ndvi, flag_temporal_anomalies
 
 _CLOUD_THRESHOLD = 20.0
 
@@ -34,6 +35,7 @@ def _parse_manifest(manifest_path: Path) -> list[dict]:
                 "date": sc["scene_date"],
                 "cloud_cover": float(sc.get("cloud_cover", 100.0)),
                 "ndvi_path": ndvi_path,
+                "raw_tiffs": sc.get("raw_tiffs", {}),
                 "source": data.get("dataset_name", "unknown"),
                 "scene_id": sc.get("scene_id", ""),
             })
@@ -100,14 +102,30 @@ def compute_field_ndvi_series(
     for s in sentinel_scenes:
         sentinel_by_date[s["date"]] = s
 
-    # Read NDVI values and build output records
+    # Read NDVI values with SCL cloud masking and build output records
     results = []
     for date_str in sorted(sentinel_by_date.keys()):
         sc = sentinel_by_date[date_str]
-        ndvi_path = Path(sc["ndvi_path"])
-        mean_ndvi = _read_ndvi_mean(ndvi_path, runtime_base)
+        ndvi_path = runtime_base / sc["ndvi_path"]
+
+        # Try SCL-based cloud masking first
+        raw_tiffs = sc.get("raw_tiffs", {})
+        scl_rel = raw_tiffs.get("scl")
+        masked = False
+        clear_fraction = 1.0
+
+        if scl_rel:
+            scl_path = runtime_base / scl_rel
+            mean_ndvi, clear_fraction = compute_cloud_masked_ndvi(ndvi_path, scl_path)
+            if mean_ndvi is None:
+                masked = True
+        else:
+            # Fallback: read raw NDVI without SCL masking
+            mean_ndvi = _read_ndvi_mean(ndvi_path, runtime_base)
+
         if mean_ndvi is None:
             continue
+
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         results.append({
             "date": date_str,
@@ -117,7 +135,22 @@ def compute_field_ndvi_series(
             "source": sc["source"],
             "scene_id": sc["scene_id"],
             "year": dt.year,
+            "clear_fraction": round(clear_fraction, 3),
+            "masked": masked,
+            "temporal_flag": False,
+            "expected_ndvi": round(mean_ndvi, 4),
         })
+
+    # Layer 3: temporal consistency check per year
+    years = sorted({r["year"] for r in results})
+    for yr in years:
+        year_records = [r for r in results if r["year"] == yr]
+        year_records = flag_temporal_anomalies(year_records)
+        # Update in place
+        for rec in year_records:
+            orig = next(r for r in results if r["date"] == rec["date"])
+            orig["temporal_flag"] = rec["temporal_flag"]
+            orig["expected_ndvi"] = rec["expected_ndvi"]
 
     return results
 

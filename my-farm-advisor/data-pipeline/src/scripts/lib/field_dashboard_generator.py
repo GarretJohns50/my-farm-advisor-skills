@@ -867,24 +867,33 @@ def _detect_2025_events(
 
 
 def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
-    """Build Plotly traces for NDVI time-series."""
+    """Build Plotly traces for NDVI time-series. Filters masked scenes."""
     if not ndvi_series:
         return []
 
-    years = sorted({d["year"] for d in ndvi_series})
+    # Filter out cloud-masked scenes (>25% pixels rejected)
+    clear_series = [d for d in ndvi_series if not d.get("masked", False)]
+
+    years = sorted({d["year"] for d in clear_series})
     traces = []
 
     for i, year in enumerate(years):
         color = FIELD_COLORS[i % len(FIELD_COLORS)]
-        year_data = [d for d in ndvi_series if d["year"] == year]
+        year_data = [d for d in clear_series if d["year"] == year]
+        if not year_data:
+            continue
 
         doys = [d["doy"] for d in year_data]
         ndvis = [d["mean_ndvi"] for d in year_data]
-        sources = [d["source"] for d in year_data]
         clouds = [d["cloud_cover"] for d in year_data]
         dates = [d["date"] for d in year_data]
+        temporal_flags = [d.get("temporal_flag", False) for d in year_data]
+        clear_fracs = [d.get("clear_fraction", 1.0) for d in year_data]
 
-        sizes = [10 if c <= 10 else 7 for c in clouds]
+        # Size by cloud cover, smaller if temporal anomaly
+        sizes = [8 if tf else (10 if c <= 10 else 7) for tf, c in zip(temporal_flags, clouds)]
+        # Symbols: hollow diamond for temporal anomalies, circle for normal
+        symbols = ["diamond-open" if tf else "circle" for tf in temporal_flags]
 
         traces.append({
             "type": "scatter",
@@ -894,7 +903,7 @@ def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
             "name": str(year),
             "line": {"color": color, "width": 2},
             "marker": {
-                "symbol": "circle",
+                "symbol": symbols,
                 "size": sizes,
                 "color": color,
                 "line": {"width": 1, "color": "white"},
@@ -903,10 +912,11 @@ def _build_ndvi_chart_data(ndvi_series: list[dict]) -> list[dict]:
                 "<b>%{text}</b><br>"
                 "Day: %{x}<br>"
                 "NDVI: %{y:.4f}<br>"
-                "Cloud: %{customdata}%<extra></extra>"
+                "Cloud: %{customdata[0]}%<br>"
+                "Clear: %{customdata[1]:.1%}<extra></extra>"
             ),
             "text": dates,
-            "customdata": clouds,
+            "customdata": [[c, cf] for c, cf in zip(clouds, clear_fracs)],
             "year": year,
         })
 
@@ -962,17 +972,25 @@ def _build_combined_ndvi_gdd_chart_data(
             (d["dayOfYear"], d["cumulativeGdd"]) for d in year_rec.get("daily", [])
         ]
 
+    # Filter out cloud-masked scenes for NDVI traces
+    clear_series = [d for d in ndvi_series if not d.get("masked", False)]
+
     for i, year in enumerate(years):
         color = FIELD_COLORS[i % len(FIELD_COLORS)]
 
-        # NDVI trace (left axis)
-        year_ndvi = [d for d in ndvi_series if d["year"] == year]
+        # NDVI trace (left axis) — clear scenes only
+        year_ndvi = [d for d in clear_series if d["year"] == year]
         if year_ndvi:
             doys = [d["doy"] for d in year_ndvi]
             ndvis = [d["mean_ndvi"] for d in year_ndvi]
             clouds = [d["cloud_cover"] for d in year_ndvi]
             dates = [d["date"] for d in year_ndvi]
-            sizes = [10 if c <= 10 else 7 for c in clouds]
+            temporal_flags = [d.get("temporal_flag", False) for d in year_ndvi]
+            clear_fracs = [d.get("clear_fraction", 1.0) for d in year_ndvi]
+
+            sizes = [8 if tf else (10 if c <= 10 else 7) for tf, c in zip(temporal_flags, clouds)]
+            symbols = ["diamond-open" if tf else "circle" for tf in temporal_flags]
+
             traces.append({
                 "type": "scatter",
                 "mode": "lines+markers",
@@ -981,7 +999,7 @@ def _build_combined_ndvi_gdd_chart_data(
                 "name": f"{year} NDVI",
                 "line": {"color": color, "width": 2},
                 "marker": {
-                    "symbol": "circle",
+                    "symbol": symbols,
                     "size": sizes,
                     "color": color,
                     "line": {"width": 1, "color": "white"},
@@ -990,10 +1008,11 @@ def _build_combined_ndvi_gdd_chart_data(
                     "<b>%{text}</b><br>"
                     "Day: %{x}<br>"
                     "NDVI: %{y:.4f}<br>"
-                    "Cloud: %{customdata}%<extra></extra>"
+                    "Cloud: %{customdata[0]}%<br>"
+                    "Clear: %{customdata[1]:.1%}<extra></extra>"
                 ),
                 "text": dates,
-                "customdata": clouds,
+                "customdata": [[c, cf] for c, cf in zip(clouds, clear_fracs)],
                 "year": year,
             })
 
@@ -1208,8 +1227,19 @@ def generate_field_dashboard(
     crop_str = ""
     if crop_history:
         crop_str = f" | {crop_history[-1].get('crop_name', '')}"
+    # NDVI quality summary
+    total_scenes = len(ndvi_series)
+    clear_scenes = len([d for d in ndvi_series if not d.get("masked", False)])
+    masked_scenes = total_scenes - clear_scenes
+    temporal_flags = len([d for d in ndvi_series if d.get("temporal_flag", False)])
+
     title = f"Field {field_id} — NDVI Dashboard"
-    subtitle = f"{area_str}{crop_str} | {len(weather_transforms)} years weather | {len(ndvi_series)} clear-sky scenes"
+    subtitle = (
+        f"{area_str}{crop_str} | {len(weather_transforms)} years weather | "
+        f"{clear_scenes} clear scenes"
+        f"{' (' + str(masked_scenes) + ' cloud-masked)' if masked_scenes > 0 else ''}"
+        f"{' | ' + str(temporal_flags) + ' temporal anomaly' if temporal_flags > 0 else ''}"
+    )
 
     years = sorted({d["year"] for d in weather_transforms})
 
@@ -1555,6 +1585,7 @@ def _build_field_html_body(
 <div class="combined-section">
     <h3>NDVI vs Cumulative GDD (with Corn Growth Stages)</h3>
     <div id="combined-chart" class="combined-chart-container"></div>
+    <p class="chart-legend-note"><span class="symbol">&#9671;</span> Open diamond = temporal anomaly (deviates >0.15 from seasonal trend)</p>
     {composite_html}
 </div>
 {crop_table_html}

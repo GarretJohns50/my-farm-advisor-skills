@@ -302,4 +302,21 @@ def _field_css_template() -> str:
 .severity-badge.severe { background: #ffebee; color: #c62828; }
 .severity-badge.moderate { background: #fff3e0; color: #ef6c00; }
 .severity-badge.mild { background: #e8f5e9; color: #2e7d32; }
+/* NDVI quality summary in subtitle */
+.quality-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    color: #666;
+}
+.quality-badge .masked { color: #d62728; }
+.quality-badge .temporal { color: #ff7f0e; }
+/* Temporal anomaly legend note */
+.chart-legend-note {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 0.3rem;
+}
+.chart-legend-note .symbol { color: #ff7f0e; font-size: 1rem; }
 """
