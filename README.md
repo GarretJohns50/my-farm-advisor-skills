@@ -8,6 +8,8 @@ The catalog is intentionally focused:
 - `my-farm-breeding-trial-management` for breeding operations, trial design, fieldbooks, germplasm, selection, crossing, and placement workflows.
 - `my-farm-qtl-analysis` for QTL, GWAS, eQTL, quality control, population structure, genomic prediction, and reporting workflows.
 
+This repo also includes a **sparse checkout** of [K-Dense Scientific Agent Skills](https://github.com/K-Dense-AI/scientific-agent-skills) under `external/scientific-agent-skills/` (39 skills selected from 154 for geospatial, genomics, statistical modeling, and visualization work). Initialize it with `git submodule update --init`.
+
 ## Skill Catalog
 
 | Skill | Start here | What it does | Best for |
@@ -227,6 +229,10 @@ my-farm-advisor-skills/
     ├── README.md
     ├── AGENTS.md
     └── ...
+└── external/
+    └── scientific-agent-skills/   # K-Dense scientific skills (sparse submodule, 39 of 154)
+        ├── PROVENANCE.md
+        └── skills/
 ```
 
 ## Working In This Repo

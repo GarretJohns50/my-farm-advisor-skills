@@ -292,6 +292,7 @@ A single-field agronomic dashboard that aligns NDVI, precipitation, temperature,
 - Interactive HTML: `fields/<field-id>/derived/dashboards/<field-id>_dashboard.html`
 - Multi-panel PNG (2025-only): `fields/<field-id>/derived/dashboards/<field-id>_multi_panel_2025.png`
   - Generated at runtime by `scripts/lib/multi_panel_dashboard.py` (not committed to repo per asset policy)
+  - Generated at runtime by `scripts/lib/multi_panel_dashboard.py` (not committed to repo per asset policy)
 
 ### Rerun the workflow
 
