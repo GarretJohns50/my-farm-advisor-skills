@@ -410,3 +410,10 @@ Large raw datasets (raster tiles, downloaded payloads, generated dashboards,
 and derived tables) are **not** committed to this repository. They live in the
 runtime tree under `DATA_PIPELINE_DATA_ROOT` per the [Runtime
 contract](AGENTS.md#runtime-contract) and must stay out of Git.
+
+## AI Tooling
+
+This project used AI-assisted development for debugging, visualization,
+geospatial workflow design, analytical idea generation, and dashboard layout.
+All AI-generated output was reviewed and verified before acceptance. See
+[AI_USAGE.md](AI_USAGE.md) for a summary.
