@@ -37,7 +37,7 @@ def _get_tile_url(z: int, x: int, y: int) -> str:
     return f"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 
 
-def _compute_extent(gdf: gpd.GeoDataFrame, buffer_ratio: float = 0.15) -> tuple[float, float, float, float]:
+def _compute_extent(gdf: gpd.GeoDataFrame, buffer_ratio: float = 0.02) -> tuple[float, float, float, float]:
     """Compute Mercator extent with buffer. Returns (min_x, min_y, max_x, max_y)."""
     bounds = gdf.total_bounds  # (min_lon, min_lat, max_lon, max_lat)
     min_x = _lon_to_mercator_x(bounds[0])

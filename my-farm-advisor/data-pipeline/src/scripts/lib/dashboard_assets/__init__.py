@@ -140,6 +140,26 @@ body { margin: 0; padding: 0; background: #f4f5f7; color: #333; }
 }
 .map-section h3 { margin: 0 0 0.5rem; font-size: 1rem; color: #444; }
 #map-container { width: 100%; height: 500px; }
+#map-container .scatterlayer .textpoint text {
+    text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+}
+.map-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    padding: 1rem;
+}
+@media (max-width: 900px) { .map-row { grid-template-columns: 1fr; } }
+.map-row .map-section { margin: 0; }
+#spread-map-container { width: 100%; height: 500px; }
+#spread-map-container .scatterlayer .textpoint text {
+    text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+}
+.spread-map-info {
+    font-size: 0.85rem;
+    color: #666;
+    margin-top: 0.5rem;
+}
 .legend {
     display: flex;
     flex-wrap: wrap;

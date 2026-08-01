@@ -319,4 +319,270 @@ def _field_css_template() -> str:
     margin-top: 0.3rem;
 }
 .chart-legend-note .symbol { color: #ff7f0e; font-size: 1rem; }
+/* Soil detail panel below map */
+.soil-detail-panel {
+    display: none;
+    margin-top: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+}
+.soil-detail-panel.visible { display: block; }
+.top-cards-panel h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: #333;
+}
+.bottom-cards-panel h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: #333;
+}
+.soil-detail-panel h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: #333;
+}
+.soil-table-wrapper {
+    max-height: 280px;
+    overflow-y: auto;
+}
+.soil-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+.soil-table th {
+    text-align: left;
+    padding: 0.35rem 0.5rem;
+    background: #e8e8e8;
+    color: #444;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+.soil-table td {
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid #eee;
+    color: #555;
+}
+.soil-table tr:nth-child(even) td {
+    background: #f5f5f5;
+}
+.soil-table th {
+    text-align: center;
+    white-space: nowrap;
+}
+.soil-table td {
+    text-align: center;
+}
+.soil-table td:first-child {
+    text-align: left;
+    font-weight: 500;
+}
+.soil-table tr.highlight td {
+    background: #fff3cd !important;
+    font-weight: 700;
+    color: #000;
+}
+.soil-table td.map-year-col {
+    background: #e3f2fd;
+    font-weight: 600;
+}
+.soil-table-wrapper {
+    max-height: 380px;
+    overflow-y: auto;
+}
+/* Nutrient selector bar */
+.nutrient-selector-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+}
+.nutrient-selector-bar label {
+    font-weight: 600;
+    color: #444;
+}
+.nutrient-selector-bar select {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: #fff;
+    cursor: pointer;
+    min-width: 80px;
+}
+.nutrient-selector-bar input[type="number"] {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: #fff;
+    min-width: 60px;
+    width: 70px;
+}
+.yield-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+.yield-unit {
+    font-size: 0.8rem;
+    color: #666;
+}
+.nutrient-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    color: #666;
+}
+.legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1px solid rgba(0,0,0,0.15);
+    vertical-align: middle;
+}
+/* Sufficiency cards */
+.top-cards-panel {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+}
+.bottom-cards-panel {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+}
+.cards-grid {
+    display: grid;
+    gap: 0.5rem;
+}
+.cards-grid.top-5 {
+    grid-template-columns: repeat(5, 1fr);
+}
+.cards-grid.bottom-7 {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+.sufficiency-card {
+    background: #fff;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    border-left: 4px solid #ccc;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    text-align: center;
+}
+.card-nutrient {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.card-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #333;
+    margin: 0.15rem 0;
+}
+.card-category {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.card-range {
+    font-size: 0.6rem;
+    color: #888;
+    margin-top: 0.15rem;
+}
+.soil-table td.change-up {
+    color: #2ca02c;
+    font-weight: 700;
+    white-space: nowrap;
+    text-align: center;
+}
+.soil-table td.change-down {
+    color: #d62728;
+    font-weight: 700;
+    white-space: nowrap;
+    text-align: center;
+}
+.change-cell {
+    display: inline-block;
+    white-space: nowrap;
+}
+.change-cell .arrow {
+    display: inline-block;
+    width: 14px;
+    text-align: center;
+    margin-right: 4px;
+}
+.change-cell .value {
+    display: inline-block;
+    width: 55px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Field Report Card */
+.report-card-panel {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+}
+.report-card-panel h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: #333;
+}
+.report-card-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.5rem;
+}
+.report-card {
+    background: #fff;
+    border-radius: 6px;
+    padding: 0.6rem 0.75rem;
+    border-left: 4px solid #ccc;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    text-align: center;
+}
+.report-card.overall {
+    background: #f5f5f5;
+    border-left-width: 4px;
+}
+.report-card-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.report-card-grade {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0.15rem 0;
+}
+.report-card-blurb {
+    font-size: 0.65rem;
+    color: #888;
+    margin-top: 0.15rem;
+    line-height: 1.3;
+}
 """

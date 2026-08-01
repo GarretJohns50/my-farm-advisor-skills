@@ -270,6 +270,79 @@ cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
 - **Crop history table** — year, crop, scene count, peak NDVI
 - **Colorblind-safe** — years differentiated by color, satellites by marker shape
 
+## Combined Multi-Field Dashboard
+
+Generate a single dashboard that compares two or more fields side by side.
+The combined dashboard overlays every field boundary on one satellite map,
+shows per-field weather and NDVI panels, builds report cards, computes
+fertilizer/lime recommendations from soil samples, and renders spread-rate
+maps. A **data-computed Analysis Summary panel** grades each field (overall,
+soil, pH, vigor, weather), reports year-over-year NDVI trends and heat-stress
+days, lists the top non-optimal soil variables, and summarizes recommended
+actions.
+
+### Standalone CLI
+
+```bash
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/field_dashboard_cli.py field-dashboard generate \
+  --grower-slug central-ne-grower \
+  --farm-slug central-ne-grower-nebraska \
+  --field-ids osm-554305501,osm-554305653
+```
+
+Use `--field-id <field-id>` instead of `--field-ids` to build a single-field
+dashboard; use a comma-separated list of two or more field IDs for the
+combined dashboard.
+
+### Output
+
+`growers/<grower>/farms/<farm>/derived/dashboards/combined_fields_dashboard.html`
+
+### Combined dashboard features
+
+- **Overlay map** — all selected field boundaries on one satellite basemap
+- **Per-field weather + NDVI panels** — one row of charts per field
+- **Report cards** — per-field grading from soil and weather data
+- **Fertilizer / lime recommendations** — derived from soil sample sufficiency ranges
+- **Spread-rate maps** — recommended application rates overlaid on each field
+- **Analysis Summary panel** — computed grades, NDVI trends, top variables, actions
+
+## Field Grid Generation
+
+Soil-sample and NDVI analysis maps are built on a ~90 m analysis grid per
+field. These helper scripts generate and enrich that grid; the dashboard CLI
+calls them automatically, so running them directly is optional.
+
+```bash
+cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
+# 1. Build the analysis grid for a field
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/generate_field_grid.py \
+  --grower-slug central-ne-grower \
+  --farm-slug central-ne-grower-nebraska \
+  --field-id osm-554305501
+
+# 2. Attach soil sample values (CEC, pH, P, K, Zn, S, NO3, ...) to each grid cell
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/enrich_grid_with_soil.py \
+  --grower-slug central-ne-grower \
+  --farm-slug central-ne-grower-nebraska \
+  --field-id osm-554305501
+
+# 3. Pull annual NDVI summaries onto the grid
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  scripts/extract_year_grids.py \
+  --grower-slug central-ne-grower \
+  --farm-slug central-ne-grower-nebraska \
+  --field-id osm-554305501
+```
+
+- Grid + soil enrichment logic: `scripts/lib/field_grid_generator.py`
+- Sufficiency rating and recommendation logic: `scripts/lib/sufficiency_ranges.py`
+- Soil sample inputs are `.xlsx` workbooks read with `pandas.read_excel` (requires `openpyxl`, see [Requirements](#requirements-dependencies))
+
 ## Assignment 3: Yearly Grower Dashboard
 
 A single-field agronomic dashboard that aligns NDVI, precipitation, temperature, and cumulative GDD on a shared time axis for the most recent year.
@@ -292,7 +365,6 @@ A single-field agronomic dashboard that aligns NDVI, precipitation, temperature,
 - Interactive HTML: `fields/<field-id>/derived/dashboards/<field-id>_dashboard.html`
 - Multi-panel PNG (2025-only): `fields/<field-id>/derived/dashboards/<field-id>_multi_panel_2025.png`
   - Generated at runtime by `scripts/lib/multi_panel_dashboard.py` (not committed to repo per asset policy)
-  - Generated at runtime by `scripts/lib/multi_panel_dashboard.py` (not committed to repo per asset policy)
 
 ### Rerun the workflow
 
@@ -312,3 +384,29 @@ cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
 - Temporal anomaly detection needs ≥4 clear-sky scenes per year
 - Cool-period detection needs a pre-computed DOY temperature baseline (auto-generated from county parquet on first run)
 - Growth stages are corn-specific; soybean stages available via `crop` parameter in `detect_critical_events()`
+
+## Requirements / Dependencies
+
+Python dependencies are pinned in [`requirements.txt`](requirements.txt) and
+installed into the runtime venv on first install (`./scripts/install.sh`).
+Key groups:
+
+- **Core data stack** — `pandas`, `numpy`, `scipy`, `scikit-learn`, `tqdm`
+- **Geospatial** — `geopandas`, `fiona`, `pyproj`, `shapely`, `rasterio`, `rasterstats`
+- **Storage / interchange** — `pyarrow`, `xarray`, `zarr`, `fsspec`
+- **Plotting / reporting** — `matplotlib`, `seaborn`, `contextily`, `plotly`, `pillow`
+- **General utilities** — `requests`, `beautifulsoup4`, `python-dotenv`
+- **Excel soil inputs** — `openpyxl` (required to read `.xlsx` soil sample
+  workbooks and `sufficiency ranges` via `pandas.read_excel` in
+  `scripts/lib/sufficiency_ranges.py`)
+
+Install into an existing runtime venv after adding new requirements:
+
+```bash
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" -m pip install -r requirements.txt
+```
+
+Large raw datasets (raster tiles, downloaded payloads, generated dashboards,
+and derived tables) are **not** committed to this repository. They live in the
+runtime tree under `DATA_PIPELINE_DATA_ROOT` per the [Runtime
+contract](AGENTS.md#runtime-contract) and must stay out of Git.

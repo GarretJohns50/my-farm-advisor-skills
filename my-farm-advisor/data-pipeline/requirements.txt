@@ -30,3 +30,6 @@ pillow>=10.0
 requests>=2.31
 beautifulsoup4>=4.12
 python-dotenv>=1.0
+
+# Excel / xlsx soil inputs (sufficiency ranges, soil sample spreadsheets)
+openpyxl>=3.1
